@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+Thumbs.db
+
+# Local Electron/runtime data
+Microsoft/
+GPUCache/
+Cache/
+Code Cache/
+Crashpad/

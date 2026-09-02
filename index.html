@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:;">
+  <title>TaskNest</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
+  <header class="titlebar">
+    <div class="brand" aria-label="TaskNest">
+      <span class="brand-mark"><span></span><span></span><span></span></span>
+      <span class="brand-name">TaskNest</span>
+    </div>
+    <div class="drag-space"></div>
+    <button class="title-widget-button" id="titleWidgetButton" title="Put today on desktop">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h5"/></svg>
+      Desktop widget
+    </button>
+  </header>
+
+  <main class="app-shell">
+    <section class="hero-panel">
+      <p class="eyebrow" id="selectedDayLabel">TODAY</p>
+      <h1>Plan the day.<br><em>Keep the story.</em></h1>
+      <p class="hero-copy">Every task is saved under its date, giving you a simple record of what each day held.</p>
+
+      <div class="progress-card">
+        <div class="progress-topline">
+          <div>
+            <span class="progress-value" id="progressValue">0%</span>
+            <span class="progress-label">complete</span>
+          </div>
+          <span class="progress-count" id="progressCount">0 of 0</span>
+        </div>
+        <div class="progress-track"><span id="progressBar"></span></div>
+      </div>
+
+      <div class="history-block">
+        <div class="history-heading">
+          <span>RECENT DAYS</span>
+          <span>Your record</span>
+        </div>
+        <div class="history-list" id="historyList"></div>
+      </div>
+    </section>
+
+    <section class="tasks-panel">
+      <div class="tasks-heading">
+        <div>
+          <p class="eyebrow" id="listEyebrow">DAILY PLAN</p>
+          <h2 id="listTitle">Today’s tasks</h2>
+        </div>
+        <div class="filter-group" aria-label="Filter tasks">
+          <button class="filter active" data-filter="all">All</button>
+          <button class="filter" data-filter="active">Open</button>
+          <button class="filter" data-filter="done">Done</button>
+        </div>
+      </div>
+
+      <div class="date-toolbar">
+        <button class="date-arrow" id="previousDay" title="Previous day" aria-label="Previous day">
+          <svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>
+        </button>
+        <label class="date-picker-wrap">
+          <svg viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z"/></svg>
+          <input type="date" id="datePicker" aria-label="Choose task date">
+        </label>
+        <button class="date-arrow" id="nextDay" title="Next day" aria-label="Next day">
+          <svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+        <button class="today-button" id="todayButton">Go to today</button>
+        <span class="saved-note"><span></span>Saved automatically</span>
+      </div>
+
+      <button class="desktop-widget-card" id="desktopWidgetButton">
+        <span class="widget-card-icon">
+          <svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 9h8M8 13h5"/></svg>
+        </span>
+        <span class="widget-card-copy">
+          <strong id="widgetCardTitle">Put today’s tasks on your desktop</strong>
+          <small id="widgetCardText">Mark tasks done without opening the full planner.</small>
+        </span>
+        <span class="widget-card-action" id="widgetCardAction">Add widget</span>
+      </button>
+
+      <form class="task-form" id="taskForm">
+        <input id="taskInput" maxlength="160" autocomplete="off" placeholder="What needs your attention on this day?" aria-label="New task">
+        <select id="priorityInput" aria-label="Priority">
+          <option value="normal">Normal</option>
+          <option value="high">Important</option>
+          <option value="low">Whenever</option>
+        </select>
+        <button class="add-button" type="submit" aria-label="Add task">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </form>
+
+      <div class="task-list" id="taskList" aria-live="polite"></div>
+
+      <div class="empty-state hidden" id="emptyState">
+        <div class="empty-mark"><span></span><span></span><span></span></div>
+        <h3>No tasks on this day</h3>
+        <p>Add one small thing, or choose another date.</p>
+      </div>
+
+      <footer class="task-footer">
+        <span id="remainingLabel">Nothing pending</span>
+        <button id="clearButton" class="text-button" type="button">Clear completed</button>
+      </footer>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status">Saved</div>
+  <script src="renderer.js"></script>
+</body>
+</html>
