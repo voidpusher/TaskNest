@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self';">
+  <title>TaskNest — Today</title>
+  <link rel="stylesheet" href="widget.css">
+</head>
+<body>
+  <header class="widget-titlebar">
+    <div class="widget-brand"><span class="brand-leaf"><i></i><i></i><i></i></span>TaskNest</div>
+    <div class="drag-space"></div>
+    <button class="title-action" id="pinButton" title="Keep above other windows">
+      <svg viewBox="0 0 24 24"><path d="M9 3h6l-.7 5 3.2 3v2H13v7l-1 1-1-1v-7H6.5v-2l3.2-3L9 3Z"/></svg>
+    </button>
+    <button class="title-action" id="openMainButton" title="Open full planner">
+      <svg viewBox="0 0 24 24"><path d="M8 4H4v16h16v-4M13 4h7v7M20 4l-9 9"/></svg>
+    </button>
+    <button class="title-action" id="minimizeButton" title="Minimize"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+    <button class="title-action close" id="closeButton" title="Close"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+  </header>
+
+  <main>
+    <div class="day-heading">
+      <div><p id="dateLabel">TODAY</p><h1>Today’s focus</h1></div>
+      <div class="score"><strong id="scoreValue">0%</strong><span>done</span></div>
+    </div>
+    <div class="progress"><span id="progressBar"></span></div>
+
+    <form id="quickForm">
+      <input id="quickInput" maxlength="160" autocomplete="off" placeholder="Add today’s task…" aria-label="Add today's task">
+      <button type="submit" aria-label="Add task"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+    </form>
+
+    <div class="widget-list" id="widgetList"></div>
+    <div class="empty" id="emptyState"><span>✓</span><strong>Nothing here yet</strong><small>Add today’s first task above.</small></div>
+
+    <footer><span id="remainingLabel">Nothing pending</span><button id="removeWidget">Remove from desktop</button></footer>
+  </main>
+  <div class="toast" id="toast">Saved</div>
+  <script src="widget.js"></script>
+</body>
+</html>

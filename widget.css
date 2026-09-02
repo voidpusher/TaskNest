@@ -1,0 +1,54 @@
+:root { --bg:#041426; --surface:rgba(5,34,59,.72); --border:rgba(207,241,255,.16); --text:#f1faff; --muted:#a7c8dc; --sage:#66d9ff; --danger:#ff657a; --yellow:#ffd447; }
+* { box-sizing: border-box; }
+html, body { width:100%; height:100%; margin:0; overflow:hidden; }
+body { position:relative; color:var(--text); background:var(--bg); font-family:"Segoe UI Variable","Aptos","Segoe UI",sans-serif; user-select:none; border:1px solid rgba(207,241,255,.14); isolation:isolate; }
+body::before { content:"";position:fixed;z-index:-2;top:50%;left:50%;width:100vh;height:100vw;background:url("assets/mountain-prayer-flags.png") center / cover no-repeat;transform:translate(-50%,-50%) rotate(-90deg) scale(1.04);filter:saturate(1.08) contrast(1.05); }
+body::after { content:"";position:fixed;z-index:-1;inset:0;background:linear-gradient(155deg,rgba(2,16,32,.66),rgba(2,15,30,.87));backdrop-filter:blur(7px) saturate(1.1); }
+button,input { font:inherit; }
+.widget-titlebar { height:44px; padding-left:13px; border-bottom:1px solid rgba(207,241,255,.11); display:flex; align-items:center; background:rgba(2,17,33,.58);backdrop-filter:blur(18px); -webkit-app-region:drag; }
+.widget-brand { display:flex; align-items:center; gap:8px; font-family:Georgia,serif; font-size:14px; }
+.brand-leaf { width:16px; height:16px; display:flex; align-items:end; gap:2px; }
+.brand-leaf i { width:4px; height:8px; border-radius:4px 4px 1px 1px; background:var(--yellow); transform:rotate(-13deg); }
+.brand-leaf i:nth-child(2) { height:14px;background:var(--sage); }.brand-leaf i:nth-child(3) { height:10px; transform:rotate(17deg);background:var(--danger); }
+.drag-space { flex:1; height:100%; }
+.title-action { width:34px; height:100%; border:0; display:grid; place-items:center; background:transparent; color:var(--muted); cursor:pointer; -webkit-app-region:no-drag; transition:.18s; }
+.title-action:hover { color:var(--text); background:rgba(255,255,255,.06); }.title-action.close:hover { background:#b84d45; }
+.title-action svg { width:14px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }.title-action#pinButton svg { fill:currentColor; stroke:none; }.title-action.unpinned { opacity:.35; }
+main { height:calc(100% - 44px); padding:20px 18px 11px; display:flex; flex-direction:column; overflow:hidden; background:linear-gradient(145deg,rgba(3,29,52,.46),rgba(2,20,38,.7));backdrop-filter:blur(12px); }
+.day-heading { display:flex; align-items:end; justify-content:space-between; }
+.day-heading p { margin:0 0 5px; color:var(--sage); font-size:9px; font-weight:700; letter-spacing:.16em; }
+h1 { margin:0; font-family:Georgia,serif; font-size:clamp(22px,7vw,28px); font-weight:400; letter-spacing:-.04em; }
+.score { display:grid; text-align:right; }.score strong { font-family:Georgia,serif; font-size:19px; font-weight:400; }.score span { color:var(--muted); font-size:8px; letter-spacing:.1em; text-transform:uppercase; }
+.progress { height:4px; margin:15px 0 14px; border-radius:99px; overflow:hidden; background:rgba(255,255,255,.08); }.progress span { display:block; width:0; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--sage),#4d9eff,var(--yellow));box-shadow:0 0 12px rgba(102,217,255,.4); transition:width .35s ease; }
+form { display:grid; grid-template-columns:1fr 38px; gap:7px; margin-bottom:10px; }
+form input { min-width:0; height:38px; padding:0 12px; border:1px solid var(--border); border-radius:9px; outline:none; background:rgba(4,32,56,.66); color:var(--text);box-shadow:inset 0 1px rgba(255,255,255,.03); user-select:text; }
+form input::placeholder { color:#6d7367; } form input:focus { border-color:rgba(170,189,140,.45); box-shadow:0 0 0 3px rgba(170,189,140,.07); }
+form button { width:38px; height:38px; border:0; border-radius:9px; display:grid; place-items:center; background:linear-gradient(135deg,var(--sage),#4d8fff); color:#031b31;box-shadow:0 6px 20px rgba(34,145,255,.3); cursor:pointer; transition:.18s; } form button:hover { transform:translateY(-2px); filter:brightness(1.08); }
+form svg { width:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; }
+.widget-list { min-height:0; overflow-y:auto; padding-right:3px; scrollbar-width:thin; scrollbar-color:#343a30 transparent; }
+.widget-task { min-height:50px;margin-bottom:5px;padding:5px 7px;border:1px solid rgba(207,241,255,.08);border-radius:10px;background:rgba(3,28,51,.46);display:grid;grid-template-columns:21px 1fr 27px;align-items:center;gap:10px;animation:enter .25s ease both;transition:.18s; }
+.widget-task:hover { background:rgba(9,52,84,.58);border-color:rgba(102,217,255,.18);transform:translateX(2px); }
+@keyframes enter { from { opacity:0; transform:translateY(6px); } }
+.check { width:19px; height:19px; padding:0; border:1px solid rgba(238,236,227,.2); border-radius:6px; display:grid; place-items:center; background:transparent; cursor:pointer; }
+.check svg { width:12px; fill:none; stroke:#172012; stroke-width:2.6; opacity:0; }.widget-task.done .check { background:var(--sage); border-color:var(--sage); }.widget-task.done .check svg { opacity:1; }
+.task-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }.widget-task.done .task-title { color:#6f756a; text-decoration:line-through; }
+.delete { width:27px;height:27px;border:0;border-radius:7px;background:transparent;color:#666c61;opacity:.5;cursor:pointer; }.delete:hover { background:rgba(214,142,125,.1);color:var(--danger);opacity:1; }.delete svg { width:13px;fill:none;stroke:currentColor;stroke-width:1.7; }
+.empty { margin:auto; display:grid; place-items:center; color:var(--muted); text-align:center; }.empty span { width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:rgba(170,189,140,.1);color:var(--sage);font-size:17px; }.empty strong { margin-top:10px;font-family:Georgia,serif;font-size:16px;font-weight:400;color:var(--text); }.empty small { margin-top:4px;font-size:9px; }
+footer { min-height:35px;padding-top:9px;display:flex;align-items:center;justify-content:space-between;color:#6f756a;font-size:9px; } footer button { border:0;background:transparent;color:inherit;font-size:9px;cursor:pointer; } footer button:hover { color:var(--danger); }
+.toast { position:fixed;left:50%;bottom:13px;padding:7px 11px;border:1px solid var(--border);border-radius:99px;background:#252b21;font-size:9px;opacity:0;transform:translate(-50%,8px);transition:.2s;pointer-events:none; }.toast.show { opacity:1;transform:translate(-50%,0); }
+.hidden { display:none; }
+@media (max-height:500px) { main { padding-top:14px; }.progress { margin:10px 0; } }
+
+/* Warm neutral widget theme with a softly visible mountain photograph. */
+:root { --bg:#171815; --surface:rgba(29,30,26,.64); --border:rgba(255,244,220,.17); --text:#fff8e9; --muted:#c5c2b6; --sage:#e8c968; --danger:#ef7163; --yellow:#f1c846; --green:#91bd83; }
+body::before { transform:translate(-50%,-50%) rotate(-90deg) scale(1.06);filter:blur(2.2px) saturate(.78) contrast(1.04) brightness(.92); }
+body::after { background:linear-gradient(155deg,rgba(15,17,15,.38),rgba(13,15,14,.61));backdrop-filter:none; }
+.widget-titlebar { border-bottom-color:rgba(255,244,220,.12);background:rgba(17,19,17,.64);backdrop-filter:blur(15px) saturate(.9); }
+main { background:linear-gradient(145deg,rgba(24,26,23,.34),rgba(16,18,16,.52));backdrop-filter:blur(9px) saturate(.9); }
+.progress span { background:linear-gradient(90deg,var(--green),var(--yellow),var(--danger));box-shadow:0 0 12px rgba(232,201,104,.3); }
+form input { background:rgba(25,28,25,.56); }
+form input:focus { border-color:rgba(232,201,104,.5);box-shadow:0 0 0 3px rgba(232,201,104,.09); }
+form button { background:linear-gradient(135deg,#f0d276,#df7b66);color:#2a2114;box-shadow:0 6px 20px rgba(224,126,98,.22); }
+.widget-task { border-color:rgba(255,244,220,.09);background:rgba(27,30,27,.4); }
+.widget-task:hover { background:rgba(44,44,37,.54);border-color:rgba(232,201,104,.2); }
+.widget-task.done .check { background:var(--green);border-color:var(--green); }
