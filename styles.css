@@ -798,3 +798,277 @@ body::after {
   .widget-card-action { display: none; }
   .task-item { grid-template-columns: 28px minmax(0, 1fr) 32px 32px; }
 }
+
+/* Matte editorial theme — clean surfaces without translucent component boxes. */
+:root {
+  --matte: #1c1f1b;
+  --matte-raised: #262924;
+  --matte-hover: #2d302a;
+  --matte-line: #3a3d36;
+  --matte-cream: #f2ecdd;
+  --matte-gold: #e8c45e;
+  --matte-coral: #e47d68;
+  --matte-green: #9bc58b;
+}
+
+.ambient { display: none; }
+
+.titlebar {
+  background: #151714;
+  border-bottom-color: #2d302a;
+  backdrop-filter: none;
+}
+
+.title-widget-button {
+  border-color: #383b34;
+  border-radius: 7px;
+  background: #20231f;
+}
+.title-widget-button:hover {
+  border-color: var(--matte-gold);
+  background: #292c27;
+}
+
+.app-shell {
+  border-inline: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.hero-panel {
+  border-right-color: rgba(242, 236, 221, .14);
+  background: linear-gradient(145deg, rgba(24, 27, 24, .72), rgba(20, 23, 21, .58));
+  backdrop-filter: none;
+}
+
+.tasks-panel {
+  background: linear-gradient(160deg, rgba(24, 27, 24, .91), rgba(18, 21, 18, .88));
+  backdrop-filter: none;
+}
+
+.progress-card {
+  overflow: visible;
+  padding: 4px 0 0 18px;
+  border: 0;
+  border-left: 3px solid var(--matte-gold);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.progress-card::after { display: none; }
+.progress-track { height: 4px; background: #353831; }
+.progress-track span {
+  background: var(--matte-gold);
+  box-shadow: none;
+}
+
+.history-empty {
+  padding: 14px 0;
+  border: 0;
+  border-top: 1px solid var(--matte-line);
+  border-radius: 0;
+  background: transparent;
+}
+.history-day {
+  padding-inline: 10px;
+  border: 0;
+  border-bottom: 1px solid var(--matte-line);
+  border-radius: 0;
+  background: transparent;
+}
+.history-day:hover {
+  border-color: var(--matte-line);
+  background: var(--matte-raised);
+  transform: none;
+}
+.history-day.selected {
+  border-color: var(--matte-gold);
+  background: transparent;
+  box-shadow: inset 3px 0 var(--matte-gold);
+}
+.history-score { background: #30332d; }
+
+.filter-group {
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.filter {
+  min-width: 50px;
+  border-radius: 6px;
+  color: #aaa99f;
+}
+.filter:hover { background: var(--matte-raised); }
+.filter.active {
+  color: #1a1b17;
+  background: var(--matte-gold);
+  box-shadow: none;
+}
+
+.date-toolbar {
+  min-height: 48px;
+  padding: 0 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--matte-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.date-arrow,
+.date-picker-wrap,
+.today-button {
+  border: 0;
+  border-radius: 7px;
+  background: var(--matte-raised);
+}
+.date-arrow:hover,
+.today-button:hover {
+  border: 0;
+  background: var(--matte-hover);
+  transform: none;
+}
+.date-picker-wrap { border: 0; background: var(--matte-raised); }
+.today-button { color: var(--matte-gold); }
+
+.desktop-widget-card,
+.desktop-widget-card:hover,
+.desktop-widget-card.active {
+  min-height: 68px;
+  border: 0;
+  border-radius: 9px;
+  color: #1b1c18;
+  background: var(--matte-gold);
+  box-shadow: none;
+}
+.desktop-widget-card:hover {
+  background: #f0ce6a;
+  transform: translateY(-1px);
+}
+.desktop-widget-card::before { display: none; }
+.widget-card-icon {
+  border-radius: 7px;
+  color: var(--matte-gold);
+  background: #20221e;
+  box-shadow: none;
+}
+.widget-card-copy small { color: rgba(27, 28, 24, .62); }
+.widget-card-action {
+  border: 0;
+  border-radius: 6px;
+  color: var(--matte-cream);
+  background: #252721;
+}
+
+.task-form {
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.task-form input,
+.task-form select {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--matte-cream);
+  background: var(--matte-raised);
+  box-shadow: none;
+}
+.task-form input::placeholder { color: #85867d; }
+.task-form input:hover,
+.task-form select:hover { background: var(--matte-hover); }
+.task-form input:focus,
+.task-form select:focus {
+  border-color: var(--matte-gold);
+  background: var(--matte-raised);
+  box-shadow: none;
+}
+.add-button {
+  border-radius: 8px;
+  color: #1a1b17;
+  background: var(--matte-coral);
+  box-shadow: none;
+}
+.add-button:hover {
+  background: #ee8a74;
+  filter: none;
+}
+
+.task-list { gap: 0; }
+.task-item {
+  overflow: visible;
+  min-height: 66px;
+  padding-inline: 12px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--matte-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.task-item:first-child { border-top: 1px solid var(--matte-line); }
+.task-item::before {
+  inset: 21px auto 21px 0;
+  width: 2px;
+  background: var(--matte-green);
+}
+.task-item:hover {
+  border-color: var(--matte-line);
+  border-radius: 7px;
+  background: var(--matte-raised);
+  box-shadow: none;
+  transform: none;
+}
+.task-check {
+  border-radius: 6px;
+  background: #20221e;
+}
+.task-action {
+  border: 0;
+  border-radius: 6px;
+  opacity: .5;
+}
+.edit-task:hover,
+.delete-task:hover { border: 0; }
+
+.empty-state {
+  min-height: 220px;
+  padding: 32px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.empty-mark span {
+  border: 0;
+  border-radius: 4px 4px 1px 1px;
+  background: #45483f;
+}
+
+.task-footer { border-top-color: var(--matte-line); }
+.text-button { border-radius: 6px; }
+.text-button:not(:disabled):hover { background: var(--matte-raised); }
+
+.edit-dialog {
+  border-color: #44473f;
+  border-radius: 12px;
+  background: #20231f;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .58);
+  backdrop-filter: none;
+}
+.edit-dialog::backdrop { background: rgba(8, 10, 8, .76); backdrop-filter: none; }
+.edit-field input,
+.edit-field select {
+  border-radius: 7px;
+  background: #2b2e29;
+}
+.dialog-close,
+.dialog-actions button { border-radius: 7px; }
+.dialog-primary {
+  color: #1a1b17;
+  background: var(--matte-gold);
+  box-shadow: none;
+}
