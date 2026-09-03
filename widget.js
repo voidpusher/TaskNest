@@ -3,8 +3,13 @@ const emptyState = document.getElementById('emptyState');
 const quickInput = document.getElementById('quickInput');
 const pinButton = document.getElementById('pinButton');
 const toast = document.getElementById('toast');
+const toastText = document.getElementById('toastText');
+const toastUndo = document.getElementById('toastUndo');
+
 let tasks = [];
+let today = localDateKey(new Date());
 let toastTimer;
+let undoAction = null;
 
 function localDateKey(date) {
   const year = date.getFullYear();
@@ -12,50 +17,171 @@ function localDateKey(date) {
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
-const today = localDateKey(new Date());
 
-function escapeHtml(value) { const div=document.createElement('div'); div.textContent=value; return div.innerHTML; }
-function showToast(message) { toast.textContent=message;toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),1300); }
-async function persist(message) { await window.tasknest.saveTasks(tasks); if(message) showToast(message); }
+function escapeHtml(value) {
+  const div = document.createElement('div');
+  div.textContent = value;
+  return div.innerHTML;
+}
+
+function showToast(message, action = null) {
+  clearTimeout(toastTimer);
+  toastText.textContent = message;
+  undoAction = action;
+  toastUndo.classList.toggle('hidden', !action);
+  toast.classList.add('show');
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('show');
+    undoAction = null;
+  }, action ? 5000 : 1500);
+}
+
+toastUndo.addEventListener('click', () => {
+  if (!undoAction) return;
+  const action = undoAction;
+  undoAction = null;
+  clearTimeout(toastTimer);
+  toast.classList.remove('show');
+  action();
+});
+
+async function persist(message, action = null) {
+  await window.tasknest.saveTasks(tasks);
+  if (message) showToast(message, action);
+}
 
 function render() {
-  const todayTasks = tasks.filter((task) => task.date === today);
+  const todayTasks = tasks.filter((task) => task.date === today && !task.archived);
   const complete = todayTasks.filter((task) => task.done).length;
   const percent = todayTasks.length ? Math.round(complete / todayTasks.length * 100) : 0;
-  document.getElementById('dateLabel').textContent = new Intl.DateTimeFormat(undefined,{weekday:'long',month:'short',day:'numeric'}).format(new Date()).toUpperCase();
+  document.getElementById('dateLabel').textContent = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase();
   document.getElementById('scoreValue').textContent = `${percent}%`;
   document.getElementById('progressBar').style.width = `${percent}%`;
-  document.getElementById('remainingLabel').textContent = todayTasks.length - complete ? `${todayTasks.length-complete} still open` : 'Nothing pending';
+  document.getElementById('remainingLabel').textContent = todayTasks.length - complete ? `${todayTasks.length - complete} still open` : todayTasks.length ? 'Everything complete' : 'Nothing pending';
   emptyState.classList.toggle('hidden', todayTasks.length !== 0);
   widgetList.classList.toggle('hidden', todayTasks.length === 0);
-  widgetList.innerHTML = todayTasks.map((task) => `<article class="widget-task ${task.done?'done':''}" data-id="${task.id}">
-    <button class="check" data-action="toggle" aria-label="${task.done?'Reopen':'Complete'} task"><svg viewBox="0 0 24 24"><path d="m6 12 4 4 8-9"/></svg></button>
-    <span class="task-title" title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</span>
-    <button class="delete" data-action="delete" aria-label="Delete task"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></button>
+  widgetList.innerHTML = todayTasks.map((task) => `<article class="widget-task ${task.done ? 'done' : ''}" data-id="${task.id}">
+    <button class="check" data-action="toggle" aria-label="${task.done ? 'Reopen' : 'Complete'} task"><svg viewBox="0 0 24 24"><path d="m6 12 4 4 8-9"/></svg></button>
+    <button class="task-title" data-action="edit" title="Click to edit">${escapeHtml(task.title)}</button>
+    <button class="edit" data-action="edit" aria-label="Edit task" title="Edit task"><svg viewBox="0 0 24 24"><path d="m4 16-.8 4 4-.8L18 8.4 14.6 5 4 16Z"/></svg></button>
+    <button class="delete" data-action="delete" aria-label="Delete task" title="Delete task"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></button>
   </article>`).join('');
 }
 
-document.getElementById('quickForm').addEventListener('submit',(event)=>{
-  event.preventDefault(); const title=quickInput.value.trim(); if(!title)return;
-  tasks.unshift({id:`${Date.now()}-${Math.random().toString(16).slice(2)}`,title,priority:'normal',done:false,date:today,createdAt:Date.now()});
-  quickInput.value=''; persist('Task saved'); render(); quickInput.focus();
+function beginInlineEdit(item, index) {
+  const oldTitle = tasks[index].title;
+  const titleButton = item.querySelector('.task-title');
+  const input = document.createElement('input');
+  input.className = 'inline-edit';
+  input.maxLength = 160;
+  input.value = oldTitle;
+  titleButton.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let finished = false;
+  const finish = (save) => {
+    if (finished) return;
+    finished = true;
+    const nextTitle = input.value.trim();
+    if (save && nextTitle && nextTitle !== oldTitle) {
+      tasks[index].title = nextTitle;
+      persist('Task updated');
+    }
+    render();
+  };
+
+  input.addEventListener('blur', () => finish(true));
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); input.blur(); }
+    if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+  });
+}
+
+document.getElementById('quickForm').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const title = quickInput.value.trim();
+  if (!title) { quickInput.focus(); return; }
+  tasks.unshift({
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    title,
+    priority: 'normal',
+    done: false,
+    archived: false,
+    date: today,
+    createdAt: Date.now(),
+    completedAt: null
+  });
+  quickInput.value = '';
+  persist('Task saved');
+  render();
+  quickInput.focus();
 });
 
-widgetList.addEventListener('click',(event)=>{
-  const button=event.target.closest('[data-action]');if(!button)return;
-  const index=tasks.findIndex((task)=>task.id===button.closest('.widget-task').dataset.id);if(index<0)return;
-  if(button.dataset.action==='toggle'){tasks[index].done=!tasks[index].done;persist(tasks[index].done?'Nicely done':'Task reopened');}
-  else {tasks.splice(index,1);persist('Task removed');} render();
+widgetList.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-action]');
+  if (!button) return;
+  const item = button.closest('.widget-task');
+  const index = tasks.findIndex((task) => task.id === item.dataset.id);
+  if (index < 0) return;
+
+  if (button.dataset.action === 'toggle') {
+    tasks[index].done = !tasks[index].done;
+    tasks[index].completedAt = tasks[index].done ? Date.now() : null;
+    persist(tasks[index].done ? 'Nicely done' : 'Task reopened');
+    render();
+  } else if (button.dataset.action === 'edit') {
+    beginInlineEdit(item, index);
+  } else {
+    const deletedTask = { ...tasks[index] };
+    tasks.splice(index, 1);
+    persist('Task deleted', () => {
+      tasks.splice(Math.min(index, tasks.length), 0, deletedTask);
+      persist('Task restored');
+      render();
+    });
+    render();
+  }
 });
 
-pinButton.addEventListener('click',async()=>applySettings(await window.tasknest.toggleWidgetPin()));
-document.getElementById('openMainButton').addEventListener('click',()=>window.tasknest.openMain());
-document.getElementById('minimizeButton').addEventListener('click',()=>window.tasknest.minimizeWidget());
-document.getElementById('closeButton').addEventListener('click',()=>window.tasknest.closeWidget());
-document.getElementById('removeWidget').addEventListener('click',()=>window.tasknest.removeWidget());
-function applySettings(settings){pinButton.classList.toggle('unpinned',!settings.widgetPinned);pinButton.title=settings.widgetPinned?'Stop keeping above other windows':'Keep above other windows';}
-window.tasknest.onTasksChanged(async()=>{tasks=await window.tasknest.loadTasks();render();});
+pinButton.addEventListener('click', async () => applySettings(await window.tasknest.toggleWidgetPin()));
+document.getElementById('openMainButton').addEventListener('click', () => window.tasknest.openMain());
+document.getElementById('minimizeButton').addEventListener('click', () => window.tasknest.minimizeWidget());
+document.getElementById('closeButton').addEventListener('click', () => window.tasknest.closeWidget());
+document.getElementById('removeWidget').addEventListener('click', () => window.tasknest.removeWidget());
+
+function applySettings(settings) {
+  pinButton.classList.toggle('unpinned', !settings.widgetPinned);
+  pinButton.title = settings.widgetPinned ? 'Stop keeping above other windows' : 'Keep above other windows';
+}
+
+window.tasknest.onTasksChanged(async () => {
+  tasks = await window.tasknest.loadTasks();
+  render();
+});
 window.tasknest.onWidgetSettings(applySettings);
 
-async function init(){tasks=await window.tasknest.loadTasks();tasks=tasks.map((task)=>task.date?task:{...task,date:today});applySettings(await window.tasknest.loadSettings());render();setTimeout(()=>quickInput.focus(),200);}
+document.addEventListener('keydown', (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    quickInput.focus();
+    quickInput.select();
+  }
+});
+
+setInterval(async () => {
+  const currentDate = localDateKey(new Date());
+  if (currentDate === today) return;
+  today = currentDate;
+  tasks = await window.tasknest.loadTasks();
+  render();
+}, 60000);
+
+async function init() {
+  tasks = await window.tasknest.loadTasks();
+  applySettings(await window.tasknest.loadSettings());
+  render();
+  setTimeout(() => quickInput.focus(), 200);
+}
+
 init();

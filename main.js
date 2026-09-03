@@ -5,6 +5,9 @@ const path = require('path');
 let mainWindow;
 let widgetWindow;
 
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) app.quit();
+
 function dataFile() {
   return path.join(app.getPath('userData'), 'tasks.json');
 }
@@ -23,16 +26,47 @@ function readJson(file, fallback) {
 
 function writeJson(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(value, null, 2));
+  const temporaryFile = `${file}.tmp`;
+  fs.writeFileSync(temporaryFile, JSON.stringify(value, null, 2));
+  fs.copyFileSync(temporaryFile, file);
+  fs.unlinkSync(temporaryFile);
+}
+
+function localDateKey() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeTask(task) {
+  if (!task || typeof task !== 'object') return null;
+  const title = String(task.title || '').trim().slice(0, 160);
+  if (!title) return null;
+  return {
+    id: String(task.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    title,
+    priority: ['high', 'normal', 'low'].includes(task.priority) ? task.priority : 'normal',
+    done: Boolean(task.done),
+    archived: Boolean(task.archived),
+    date: /^\d{4}-\d{2}-\d{2}$/.test(task.date) ? task.date : localDateKey(),
+    createdAt: Number.isFinite(Number(task.createdAt)) ? Number(task.createdAt) : Date.now(),
+    completedAt: task.completedAt && Number.isFinite(Number(task.completedAt)) ? Number(task.completedAt) : null
+  };
 }
 
 function readTasks() {
   const tasks = readJson(dataFile(), []);
-  return Array.isArray(tasks) ? tasks : [];
+  return Array.isArray(tasks) ? tasks.map(normalizeTask).filter(Boolean) : [];
 }
 
 function writeTasks(tasks) {
-  writeJson(dataFile(), Array.isArray(tasks) ? tasks : []);
+  const safeTasks = Array.isArray(tasks) ? tasks.slice(0, 5000).map(normalizeTask).filter(Boolean) : [];
+  if (fs.existsSync(dataFile())) {
+    try { fs.copyFileSync(dataFile(), path.join(app.getPath('userData'), 'tasks.backup.json')); } catch { /* Keep saving even if backup fails. */ }
+  }
+  writeJson(dataFile(), safeTasks);
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send('tasks:changed');
   }
@@ -130,6 +164,16 @@ app.whenReady().then(() => {
   createMainWindow();
   if (readSettings().widgetEnabled) createWidgetWindow();
   app.on('activate', () => createMainWindow());
+});
+
+app.on('second-instance', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  } else {
+    createMainWindow();
+  }
 });
 
 app.on('window-all-closed', () => {

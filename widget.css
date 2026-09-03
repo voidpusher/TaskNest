@@ -52,3 +52,14 @@ form button { background:linear-gradient(135deg,#f0d276,#df7b66);color:#2a2114;b
 .widget-task { border-color:rgba(255,244,220,.09);background:rgba(27,30,27,.4); }
 .widget-task:hover { background:rgba(44,44,37,.54);border-color:rgba(232,201,104,.2); }
 .widget-task.done .check { background:var(--green);border-color:var(--green); }
+
+/* Core interaction polish */
+.widget-task { grid-template-columns:21px minmax(0,1fr) 27px 27px; }
+.task-title { width:100%;min-width:0;padding:0;border:0;background:transparent;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;text-align:left;cursor:text; }
+.widget-task.done .task-title { color:#8e9189;text-decoration:line-through; }
+.edit { width:27px;height:27px;padding:0;border:0;border-radius:7px;display:grid;place-items:center;background:transparent;color:#9a9a90;opacity:.35;cursor:pointer;transition:.18s; }
+.edit:hover { color:var(--yellow);background:rgba(232,201,104,.1);opacity:1; }
+.edit svg { width:13px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round; }
+.inline-edit { width:100%;min-width:0;height:30px;padding:0 7px;border:1px solid rgba(232,201,104,.45);border-radius:7px;outline:none;background:rgba(20,22,19,.82);color:var(--text);font-size:12px;user-select:text;box-shadow:0 0 0 3px rgba(232,201,104,.08); }
+.toast { display:flex;align-items:center;gap:8px; }
+.toast button { padding:0;border:0;background:transparent;color:var(--yellow);font-size:9px;font-weight:600;cursor:pointer; }
