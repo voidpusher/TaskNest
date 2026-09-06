@@ -1,6 +1,7 @@
 if (!window.tasknest) {
   const browserTaskKey = 'tasknest-browser-tasks';
   const browserSettingsKey = 'tasknest-browser-settings';
+  const browserTargetsKey = 'tasknest-browser-weekly-targets';
   const now = new Date();
   const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const starterTasks = [
@@ -17,14 +18,18 @@ if (!window.tasknest) {
   };
   const loadBrowserSettings = () => JSON.parse(localStorage.getItem(browserSettingsKey) || '{"widgetEnabled":false}');
   const saveBrowserSettings = (settings) => localStorage.setItem(browserSettingsKey, JSON.stringify(settings));
+  const loadBrowserTargets = () => JSON.parse(localStorage.getItem(browserTargetsKey) || '[]');
 
   window.tasknest = {
     loadTasks: async () => loadBrowserTasks(),
     saveTasks: async (items) => { localStorage.setItem(browserTaskKey, JSON.stringify(items)); return true; },
     loadSettings: async () => loadBrowserSettings(),
+    loadWeeklyTargets: async () => loadBrowserTargets(),
+    saveWeeklyTargets: async (items) => { localStorage.setItem(browserTargetsKey, JSON.stringify(items)); return true; },
     openWidget: async () => { const settings = { ...loadBrowserSettings(), widgetEnabled: true }; saveBrowserSettings(settings); return settings; },
     removeWidget: async () => { const settings = { ...loadBrowserSettings(), widgetEnabled: false }; saveBrowserSettings(settings); return settings; },
     onTasksChanged: () => {},
+    onWeeklyTargetsChanged: () => {},
     onWidgetSettings: () => {}
   };
 }
@@ -43,8 +48,12 @@ const editDialog = document.getElementById('editDialog');
 const editForm = document.getElementById('editForm');
 const searchInput = document.getElementById('searchInput');
 const calendarGrid = document.getElementById('calendarGrid');
+const weeklyDialog = document.getElementById('weeklyDialog');
+const weeklyTargetForm = document.getElementById('weeklyTargetForm');
+const weeklyTargetList = document.getElementById('weeklyTargetList');
 
 let tasks = [];
+let weeklyTargets = [];
 let selectedDate = localDateKey(new Date());
 let activeFilter = 'all';
 let searchQuery = '';
@@ -77,6 +86,28 @@ function validDateKey(key) {
 
 function formatDay(key, options) {
   return new Intl.DateTimeFormat(undefined, options).format(parseDate(key));
+}
+
+function weekBounds(key = selectedDate) {
+  const date = parseDate(key);
+  const mondayOffset = (date.getDay() + 6) % 7;
+  const start = new Date(date);
+  start.setDate(date.getDate() - mondayOffset);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { start: localDateKey(start), end: localDateKey(end) };
+}
+
+function weeklyTargetProgress(target, date = selectedDate) {
+  const { start, end } = weekBounds(date);
+  const completedDays = new Set(tasks
+    .filter((task) => !task.archived && task.done && task.weeklyTargetId === target.id && task.date >= start && task.date <= end)
+    .map((task) => task.date));
+  return completedDays.size;
+}
+
+function targetTaskForDay(targetId, date = selectedDate) {
+  return tasks.find((task) => !task.archived && task.weeklyTargetId === targetId && task.date === date);
 }
 
 function escapeHtml(value) {
@@ -112,6 +143,11 @@ toastUndo.addEventListener('click', () => {
 
 async function persist(message, action = null) {
   await window.tasknest.saveTasks(tasks);
+  if (message) showToast(message, action);
+}
+
+async function persistWeeklyTargets(message, action = null) {
+  await window.tasknest.saveWeeklyTargets(weeklyTargets);
   if (message) showToast(message, action);
 }
 
@@ -185,6 +221,45 @@ function renderWidgetCard() {
   document.getElementById('desktopWidgetButton').classList.toggle('active', widgetEnabled);
 }
 
+function renderWeeklyTargets() {
+  const activeTargets = weeklyTargets.filter((target) => !target.archived);
+  const totalGoal = activeTargets.reduce((sum, target) => sum + target.target, 0);
+  const totalDone = activeTargets.reduce((sum, target) => sum + Math.min(target.target, weeklyTargetProgress(target)), 0);
+  const percentage = totalGoal ? Math.round((totalDone / totalGoal) * 100) : 0;
+  const completedTargets = activeTargets.filter((target) => weeklyTargetProgress(target) >= target.target).length;
+  const selectedDayName = formatDay(selectedDate, { weekday: 'short', month: 'short', day: 'numeric' });
+  const { start, end } = weekBounds();
+
+  document.getElementById('weeklyTargetsBadge').textContent = activeTargets.length ? `${completedTargets}/${activeTargets.length}` : 'New';
+  document.getElementById('weeklySummaryCount').textContent = `${totalDone} / ${totalGoal}`;
+  document.getElementById('weeklySummaryBar').style.width = `${percentage}%`;
+  document.getElementById('weeklySummaryCopy').textContent = activeTargets.length
+    ? `${completedTargets} of ${activeTargets.length} targets reached · ${totalGoal - totalDone} check-ins left`
+    : 'Set a weekly target and turn it into daily action.';
+  document.getElementById('weeklyRangeLabel').textContent = `${formatDay(start, { month: 'short', day: 'numeric' })} – ${formatDay(end, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  document.getElementById('weeklyEmpty').classList.toggle('hidden', activeTargets.length > 0);
+
+  weeklyTargetList.innerHTML = activeTargets.map((target) => {
+    const completed = weeklyTargetProgress(target);
+    const cappedCompleted = Math.min(completed, target.target);
+    const linkedTask = targetTaskForDay(target.id);
+    const targetPercentage = Math.min(100, Math.round((cappedCompleted / target.target) * 100));
+    return `<article class="weekly-target-row" data-target-id="${escapeHtml(target.id)}">
+      <div class="weekly-target-main">
+        <div class="weekly-target-titleline">
+          <strong>${escapeHtml(target.title)}</strong>
+          <span>${cappedCompleted} / ${target.target} days</span>
+        </div>
+        <div class="weekly-target-meter"><span style="width:${targetPercentage}%"></span></div>
+      </div>
+      <button class="weekly-plan-button ${linkedTask ? 'linked' : ''}" data-weekly-action="plan" type="button" ${linkedTask ? 'disabled' : ''}>
+        ${linkedTask ? `Added to ${selectedDayName}` : `Add to ${selectedDayName}`}
+      </button>
+      <button class="weekly-delete-button" data-weekly-action="delete" type="button" aria-label="Delete ${escapeHtml(target.title)} target" title="Delete target">×</button>
+    </article>`;
+  }).join('');
+}
+
 function renderEmptyState(visibleCount) {
   const heading = emptyState.querySelector('h3');
   const copy = emptyState.querySelector('p');
@@ -221,7 +296,7 @@ function render() {
       <button class="task-check" data-action="toggle" aria-label="${task.done ? 'Mark as open' : 'Mark as complete'}">${icon.check}</button>
       <div class="task-copy">
         <span class="task-title" title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</span>
-        <span class="task-meta"><span class="priority-dot ${task.priority}"></span>${task.priority === 'high' ? 'Important' : task.priority === 'low' ? 'Whenever' : 'Normal'} · ${task.done && task.completedAt ? `Completed ${timeLabel(task.completedAt)}` : `Added ${timeLabel(task.createdAt)}`}</span>
+        <span class="task-meta"><span class="priority-dot ${task.priority}"></span>${task.weeklyTargetId ? 'Weekly target · ' : ''}${task.priority === 'high' ? 'Important' : task.priority === 'low' ? 'Whenever' : 'Normal'} · ${task.done && task.completedAt ? `Completed ${timeLabel(task.completedAt)}` : `Added ${timeLabel(task.createdAt)}`}</span>
       </div>
       <button class="task-action edit-task" data-action="edit" aria-label="Edit task" title="Edit task">${icon.edit}</button>
       <button class="task-action delete-task" data-action="delete" aria-label="Delete task" title="Delete task">${icon.trash}</button>
@@ -247,6 +322,7 @@ function render() {
   renderHistory();
   renderCalendar();
   renderWidgetCard();
+  renderWeeklyTargets();
 }
 
 function addTask(title, priority = 'normal') {
@@ -306,7 +382,9 @@ taskList.addEventListener('click', (event) => {
   if (actionButton.dataset.action === 'toggle') {
     tasks[index].done = !tasks[index].done;
     tasks[index].completedAt = tasks[index].done ? Date.now() : null;
-    persist(tasks[index].done ? 'Nicely done' : 'Task reopened');
+    const linkedTarget = weeklyTargets.find((target) => target.id === tasks[index].weeklyTargetId && !target.archived);
+    const targetReached = linkedTarget && tasks[index].done && weeklyTargetProgress(linkedTarget) >= linkedTarget.target;
+    persist(targetReached ? `${linkedTarget.title}: weekly target reached` : tasks[index].done ? 'Nicely done' : 'Task reopened');
   } else if (actionButton.dataset.action === 'edit') {
     openEditor(tasks[index]);
     return;
@@ -411,6 +489,72 @@ document.getElementById('titleWidgetButton').addEventListener('click', async () 
   }
 });
 
+function openWeeklyTargets() {
+  renderWeeklyTargets();
+  weeklyDialog.showModal();
+  setTimeout(() => document.getElementById('weeklyTargetTitle').focus(), 50);
+}
+
+document.getElementById('weeklyTargetsButton').addEventListener('click', openWeeklyTargets);
+document.getElementById('weeklySummaryButton').addEventListener('click', openWeeklyTargets);
+document.getElementById('weeklyClose').addEventListener('click', () => weeklyDialog.close());
+weeklyDialog.addEventListener('click', (event) => {
+  if (event.target === weeklyDialog) weeklyDialog.close();
+});
+
+weeklyTargetForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const titleInput = document.getElementById('weeklyTargetTitle');
+  const title = titleInput.value.trim();
+  if (!title) return;
+  weeklyTargets.push({
+    id: `target-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    title,
+    target: Number(document.getElementById('weeklyTargetCount').value),
+    createdAt: Date.now(),
+    archived: false
+  });
+  titleInput.value = '';
+  await persistWeeklyTargets('Weekly target created');
+  render();
+  titleInput.focus();
+});
+
+weeklyTargetList.addEventListener('click', async (event) => {
+  const actionButton = event.target.closest('[data-weekly-action]');
+  if (!actionButton) return;
+  const row = actionButton.closest('[data-target-id]');
+  const targetIndex = weeklyTargets.findIndex((target) => target.id === row.dataset.targetId);
+  if (targetIndex < 0) return;
+  const target = weeklyTargets[targetIndex];
+
+  if (actionButton.dataset.weeklyAction === 'plan') {
+    if (targetTaskForDay(target.id)) return;
+    tasks.unshift({
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      title: target.title,
+      priority: 'normal',
+      done: false,
+      archived: false,
+      date: selectedDate,
+      createdAt: Date.now(),
+      completedAt: null,
+      weeklyTargetId: target.id
+    });
+    await persist(`Added ${target.title} to ${formatDay(selectedDate, { weekday: 'short' })}`);
+    setFilter('all');
+  } else if (actionButton.dataset.weeklyAction === 'delete') {
+    const removed = { ...target };
+    weeklyTargets.splice(targetIndex, 1);
+    await persistWeeklyTargets('Weekly target deleted', async () => {
+      weeklyTargets.splice(Math.min(targetIndex, weeklyTargets.length), 0, removed);
+      await persistWeeklyTargets('Weekly target restored');
+      render();
+    });
+  }
+  render();
+});
+
 document.addEventListener('keydown', (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault();
@@ -433,13 +577,21 @@ window.tasknest.onTasksChanged(async () => {
   render();
 });
 
+window.tasknest.onWeeklyTargetsChanged(async () => {
+  weeklyTargets = await window.tasknest.loadWeeklyTargets();
+  render();
+});
+
 window.tasknest.onWidgetSettings((settings) => {
   widgetEnabled = settings.widgetEnabled;
   renderWidgetCard();
 });
 
 async function init() {
-  tasks = await window.tasknest.loadTasks();
+  [tasks, weeklyTargets] = await Promise.all([
+    window.tasknest.loadTasks(),
+    window.tasknest.loadWeeklyTargets()
+  ]);
   const settings = await window.tasknest.loadSettings();
   widgetEnabled = settings.widgetEnabled;
   render();

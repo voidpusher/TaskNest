@@ -16,6 +16,10 @@ function settingsFile() {
   return path.join(app.getPath('userData'), 'settings.json');
 }
 
+function targetsFile() {
+  return path.join(app.getPath('userData'), 'weekly-targets.json');
+}
+
 function readJson(file, fallback) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -52,8 +56,34 @@ function normalizeTask(task) {
     archived: Boolean(task.archived),
     date: /^\d{4}-\d{2}-\d{2}$/.test(task.date) ? task.date : localDateKey(),
     createdAt: Number.isFinite(Number(task.createdAt)) ? Number(task.createdAt) : Date.now(),
-    completedAt: task.completedAt && Number.isFinite(Number(task.completedAt)) ? Number(task.completedAt) : null
+    completedAt: task.completedAt && Number.isFinite(Number(task.completedAt)) ? Number(task.completedAt) : null,
+    weeklyTargetId: task.weeklyTargetId ? String(task.weeklyTargetId).slice(0, 120) : null
   };
+}
+
+function normalizeTarget(target) {
+  if (!target || typeof target !== 'object') return null;
+  const title = String(target.title || '').trim().slice(0, 80);
+  if (!title) return null;
+  return {
+    id: String(target.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`).slice(0, 120),
+    title,
+    target: Math.max(1, Math.min(7, Math.round(Number(target.target) || 1))),
+    createdAt: Number.isFinite(Number(target.createdAt)) ? Number(target.createdAt) : Date.now(),
+    archived: Boolean(target.archived)
+  };
+}
+
+function readTargets() {
+  const targets = readJson(targetsFile(), []);
+  return Array.isArray(targets) ? targets.map(normalizeTarget).filter(Boolean) : [];
+}
+
+function writeTargets(targets) {
+  const safeTargets = Array.isArray(targets) ? targets.slice(0, 100).map(normalizeTarget).filter(Boolean) : [];
+  writeJson(targetsFile(), safeTargets);
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('targets:changed');
+  return true;
 }
 
 function readTasks() {
@@ -183,6 +213,8 @@ app.on('window-all-closed', () => {
 ipcMain.handle('tasks:load', () => readTasks());
 ipcMain.handle('tasks:save', (_event, tasks) => writeTasks(tasks));
 ipcMain.handle('settings:load', () => readSettings());
+ipcMain.handle('targets:load', () => readTargets());
+ipcMain.handle('targets:save', (_event, targets) => writeTargets(targets));
 
 ipcMain.handle('widget:open', () => {
   saveSettings({ widgetEnabled: true });
