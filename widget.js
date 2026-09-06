@@ -11,6 +11,75 @@ let today = localDateKey(new Date());
 let toastTimer;
 let undoAction = null;
 
+function normalizeTask(task) {
+  const createdAt = Number(task.createdAt) || Date.now();
+  const done = task.status === 'completed' || Boolean(task.done);
+  return {
+    ...task,
+    status: done ? 'completed' : 'open',
+    done,
+    description: task.description || '',
+    dueTime: task.dueTime || null,
+    estimatedMinutes: Number(task.estimatedMinutes) || null,
+    projectId: task.projectId || null,
+    subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
+    recurrence: task.recurrence || 'none',
+    reminderAt: Number(task.reminderAt) || null,
+    createdAt,
+    completedAt: Number(task.completedAt) || null,
+    updatedAt: Number(task.updatedAt) || Number(task.completedAt) || createdAt,
+    order: Number.isFinite(Number(task.order)) ? Number(task.order) : -createdAt,
+    archived: Boolean(task.archived),
+    deletedAt: Number(task.deletedAt) || null,
+    seriesId: task.seriesId || null
+  };
+}
+
+function touch(task) {
+  task.updatedAt = Date.now();
+}
+
+function nextOccurrenceDate(task) {
+  if (!task.date || task.recurrence === 'none') return null;
+  const [year, month, day] = task.date.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  if (task.recurrence === 'daily') date.setDate(date.getDate() + 1);
+  if (task.recurrence === 'weekly') date.setDate(date.getDate() + 7);
+  if (task.recurrence === 'monthly') {
+    const preferredDay = date.getDate();
+    date.setDate(1);
+    date.setMonth(date.getMonth() + 1);
+    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    date.setDate(Math.min(preferredDay, lastDay));
+  }
+  if (task.recurrence === 'weekdays') do { date.setDate(date.getDate() + 1); } while ([0, 6].includes(date.getDay()));
+  return localDateKey(date);
+}
+
+function createNextOccurrence(task) {
+  const nextDate = nextOccurrenceDate(task);
+  if (!nextDate) return;
+  const seriesId = task.seriesId || task.id;
+  task.seriesId = seriesId;
+  if (tasks.some((item) => !item.archived && item.seriesId === seriesId && item.date === nextDate)) return;
+  const now = Date.now();
+  tasks.push(normalizeTask({
+    ...task,
+    id: `${now}-${Math.random().toString(16).slice(2)}`,
+    date: nextDate,
+    status: 'open',
+    done: false,
+    archived: false,
+    deletedAt: null,
+    createdAt: now,
+    completedAt: null,
+    updatedAt: now,
+    reminderAt: null,
+    seriesId,
+    subtasks: task.subtasks.map((item) => ({ ...item, id: `${now}-${Math.random().toString(16).slice(2)}`, done: false, completedAt: null, createdAt: now }))
+  }));
+}
+
 function localDateKey(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -86,6 +155,7 @@ function beginInlineEdit(item, index) {
     const nextTitle = input.value.trim();
     if (save && nextTitle && nextTitle !== oldTitle) {
       tasks[index].title = nextTitle;
+      touch(tasks[index]);
       persist('Task updated');
     }
     render();
@@ -102,16 +172,27 @@ document.getElementById('quickForm').addEventListener('submit', (event) => {
   event.preventDefault();
   const title = quickInput.value.trim();
   if (!title) { quickInput.focus(); return; }
-  tasks.unshift({
+  const now = Date.now();
+  tasks.unshift(normalizeTask({
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     title,
+    description: '',
     priority: 'normal',
+    status: 'open',
     done: false,
     archived: false,
     date: today,
-    createdAt: Date.now(),
-    completedAt: null
-  });
+    dueTime: null,
+    estimatedMinutes: null,
+    projectId: null,
+    subtasks: [],
+    recurrence: 'none',
+    reminderAt: null,
+    createdAt: now,
+    completedAt: null,
+    updatedAt: now,
+    order: tasks.length ? Math.min(...tasks.map((task) => task.order)) - 1 : 0
+  }));
   quickInput.value = '';
   persist('Task saved');
   render();
@@ -127,16 +208,23 @@ widgetList.addEventListener('click', (event) => {
 
   if (button.dataset.action === 'toggle') {
     tasks[index].done = !tasks[index].done;
+    tasks[index].status = tasks[index].done ? 'completed' : 'open';
     tasks[index].completedAt = tasks[index].done ? Date.now() : null;
+    touch(tasks[index]);
+    if (tasks[index].done) createNextOccurrence(tasks[index]);
     persist(tasks[index].done ? 'Nicely done' : 'Task reopened');
     render();
   } else if (button.dataset.action === 'edit') {
     beginInlineEdit(item, index);
   } else {
     const deletedTask = { ...tasks[index] };
-    tasks.splice(index, 1);
+    tasks[index].archived = true;
+    tasks[index].deletedAt = Date.now();
+    touch(tasks[index]);
     persist('Task deleted', () => {
-      tasks.splice(Math.min(index, tasks.length), 0, deletedTask);
+      tasks[index].archived = deletedTask.archived;
+      tasks[index].deletedAt = deletedTask.deletedAt;
+      touch(tasks[index]);
       persist('Task restored');
       render();
     });
@@ -156,7 +244,7 @@ function applySettings(settings) {
 }
 
 window.tasknest.onTasksChanged(async () => {
-  tasks = await window.tasknest.loadTasks();
+  tasks = (await window.tasknest.loadTasks()).map(normalizeTask);
   render();
 });
 window.tasknest.onWidgetSettings(applySettings);
@@ -173,12 +261,12 @@ setInterval(async () => {
   const currentDate = localDateKey(new Date());
   if (currentDate === today) return;
   today = currentDate;
-  tasks = await window.tasknest.loadTasks();
+  tasks = (await window.tasknest.loadTasks()).map(normalizeTask);
   render();
 }, 60000);
 
 async function init() {
-  tasks = await window.tasknest.loadTasks();
+  tasks = (await window.tasknest.loadTasks()).map(normalizeTask);
   applySettings(await window.tasknest.loadSettings());
   render();
   setTimeout(() => quickInput.focus(), 200);

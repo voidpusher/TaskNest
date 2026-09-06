@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Notification } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
@@ -18,6 +18,14 @@ function settingsFile() {
 
 function targetsFile() {
   return path.join(app.getPath('userData'), 'weekly-targets.json');
+}
+
+function projectsFile() {
+  return path.join(app.getPath('userData'), 'projects.json');
+}
+
+function reminderLogFile() {
+  return path.join(app.getPath('userData'), 'reminder-log.json');
 }
 
 function readJson(file, fallback) {
@@ -48,17 +56,70 @@ function normalizeTask(task) {
   if (!task || typeof task !== 'object') return null;
   const title = String(task.title || '').trim().slice(0, 160);
   if (!title) return null;
+  const createdAt = Number.isFinite(Number(task.createdAt)) ? Number(task.createdAt) : Date.now();
+  const completedAt = task.completedAt && Number.isFinite(Number(task.completedAt)) ? Number(task.completedAt) : null;
+  const done = task.status === 'completed' || Boolean(task.done);
+  const date = task.date === null || task.date === '' ? null : /^\d{4}-\d{2}-\d{2}$/.test(task.date) ? task.date : localDateKey();
+  const subtasks = Array.isArray(task.subtasks) ? task.subtasks.slice(0, 100).map((subtask) => {
+    const subtaskTitle = String(subtask?.title || '').trim().slice(0, 160);
+    if (!subtaskTitle) return null;
+    return {
+      id: String(subtask.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`).slice(0, 120),
+      title: subtaskTitle,
+      done: Boolean(subtask.done),
+      createdAt: Number.isFinite(Number(subtask.createdAt)) ? Number(subtask.createdAt) : createdAt,
+      completedAt: subtask.completedAt && Number.isFinite(Number(subtask.completedAt)) ? Number(subtask.completedAt) : null
+    };
+  }).filter(Boolean) : [];
   return {
     id: String(task.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
     title,
+    description: String(task.description || '').trim().slice(0, 4000),
+    status: done ? 'completed' : 'open',
     priority: ['high', 'normal', 'low'].includes(task.priority) ? task.priority : 'normal',
-    done: Boolean(task.done),
+    done,
     archived: Boolean(task.archived),
-    date: /^\d{4}-\d{2}-\d{2}$/.test(task.date) ? task.date : localDateKey(),
-    createdAt: Number.isFinite(Number(task.createdAt)) ? Number(task.createdAt) : Date.now(),
-    completedAt: task.completedAt && Number.isFinite(Number(task.completedAt)) ? Number(task.completedAt) : null,
+    deletedAt: task.deletedAt && Number.isFinite(Number(task.deletedAt)) ? Number(task.deletedAt) : null,
+    date,
+    dueTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(task.dueTime || '') ? task.dueTime : null,
+    estimatedMinutes: Number(task.estimatedMinutes) > 0 ? Math.min(1440, Math.round(Number(task.estimatedMinutes))) : null,
+    projectId: task.projectId ? String(task.projectId).slice(0, 120) : null,
+    subtasks,
+    recurrence: ['none', 'daily', 'weekdays', 'weekly', 'monthly'].includes(task.recurrence) ? task.recurrence : 'none',
+    reminderAt: Number(task.reminderAt) > 0 ? Number(task.reminderAt) : null,
+    createdAt,
+    completedAt,
+    updatedAt: Number.isFinite(Number(task.updatedAt)) ? Number(task.updatedAt) : (completedAt || createdAt),
+    order: Number.isFinite(Number(task.order)) ? Number(task.order) : -createdAt,
+    seriesId: task.seriesId ? String(task.seriesId).slice(0, 120) : null,
     weeklyTargetId: task.weeklyTargetId ? String(task.weeklyTargetId).slice(0, 120) : null
   };
+}
+
+function normalizeProject(project) {
+  if (!project || typeof project !== 'object') return null;
+  const name = String(project.name || '').trim().slice(0, 60);
+  if (!name) return null;
+  return {
+    id: String(project.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`).slice(0, 120),
+    name,
+    color: /^#[0-9a-f]{6}$/i.test(project.color || '') ? project.color : '#0a84ff',
+    archived: Boolean(project.archived),
+    createdAt: Number.isFinite(Number(project.createdAt)) ? Number(project.createdAt) : Date.now(),
+    updatedAt: Number.isFinite(Number(project.updatedAt)) ? Number(project.updatedAt) : Date.now()
+  };
+}
+
+function readProjects() {
+  const projects = readJson(projectsFile(), []);
+  return Array.isArray(projects) ? projects.map(normalizeProject).filter(Boolean) : [];
+}
+
+function writeProjects(projects) {
+  const safeProjects = Array.isArray(projects) ? projects.slice(0, 250).map(normalizeProject).filter(Boolean) : [];
+  writeJson(projectsFile(), safeProjects);
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('projects:changed');
+  return true;
 }
 
 function normalizeTarget(target) {
@@ -87,20 +148,51 @@ function writeTargets(targets) {
 }
 
 function readTasks() {
-  const tasks = readJson(dataFile(), []);
+  let tasks = readJson(dataFile(), null);
+  if (!Array.isArray(tasks)) tasks = readJson(path.join(app.getPath('userData'), 'tasks.backup.json'), null);
+  if (!Array.isArray(tasks)) tasks = readJson(path.join(app.getPath('userData'), 'tasks.backup.2.json'), []);
   return Array.isArray(tasks) ? tasks.map(normalizeTask).filter(Boolean) : [];
 }
 
 function writeTasks(tasks) {
-  const safeTasks = Array.isArray(tasks) ? tasks.slice(0, 5000).map(normalizeTask).filter(Boolean) : [];
+  const incomingTasks = Array.isArray(tasks) ? tasks.slice(0, 5000).map(normalizeTask).filter(Boolean) : [];
+  const taskMap = new Map(readTasks().map((task) => [task.id, task]));
+  for (const task of incomingTasks) {
+    const existing = taskMap.get(task.id);
+    if (!existing || task.updatedAt >= existing.updatedAt) taskMap.set(task.id, task);
+  }
+  const safeTasks = [...taskMap.values()].sort((a, b) => a.order - b.order).slice(0, 5000);
   if (fs.existsSync(dataFile())) {
-    try { fs.copyFileSync(dataFile(), path.join(app.getPath('userData'), 'tasks.backup.json')); } catch { /* Keep saving even if backup fails. */ }
+    try {
+      const firstBackup = path.join(app.getPath('userData'), 'tasks.backup.json');
+      const secondBackup = path.join(app.getPath('userData'), 'tasks.backup.2.json');
+      if (fs.existsSync(firstBackup)) fs.copyFileSync(firstBackup, secondBackup);
+      fs.copyFileSync(dataFile(), firstBackup);
+    } catch { /* Keep saving even if backup rotation fails. */ }
   }
   writeJson(dataFile(), safeTasks);
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send('tasks:changed');
   }
   return true;
+}
+
+function checkReminders() {
+  if (!Notification.isSupported()) return;
+  const now = Date.now();
+  const notified = new Set(readJson(reminderLogFile(), []));
+  let changed = false;
+  for (const task of readTasks()) {
+    const reminderKey = `${task.id}:${task.reminderAt}`;
+    if (!task.archived && !task.done && task.reminderAt && task.reminderAt <= now && task.reminderAt > now - 86400000 && !notified.has(reminderKey)) {
+      const notification = new Notification({ title: task.title, body: task.description || 'TaskNest reminder' });
+      notification.on('click', () => createMainWindow());
+      notification.show();
+      notified.add(reminderKey);
+      changed = true;
+    }
+  }
+  if (changed) writeJson(reminderLogFile(), [...notified].slice(-1000));
 }
 
 function readSettings() {
@@ -193,6 +285,8 @@ function createWidgetWindow() {
 app.whenReady().then(() => {
   createMainWindow();
   if (readSettings().widgetEnabled) createWidgetWindow();
+  checkReminders();
+  setInterval(checkReminders, 30000);
   app.on('activate', () => createMainWindow());
 });
 
@@ -215,6 +309,8 @@ ipcMain.handle('tasks:save', (_event, tasks) => writeTasks(tasks));
 ipcMain.handle('settings:load', () => readSettings());
 ipcMain.handle('targets:load', () => readTargets());
 ipcMain.handle('targets:save', (_event, targets) => writeTargets(targets));
+ipcMain.handle('projects:load', () => readProjects());
+ipcMain.handle('projects:save', (_event, projects) => writeProjects(projects));
 
 ipcMain.handle('widget:open', () => {
   saveSettings({ widgetEnabled: true });
