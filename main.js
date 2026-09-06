@@ -90,7 +90,7 @@ function normalizeTask(task) {
     createdAt,
     completedAt,
     updatedAt: Number.isFinite(Number(task.updatedAt)) ? Number(task.updatedAt) : (completedAt || createdAt),
-    order: Number.isFinite(Number(task.order)) ? Number(task.order) : -createdAt,
+    order: Number.isFinite(Number(task.order)) ? Number(task.order) : createdAt,
     seriesId: task.seriesId ? String(task.seriesId).slice(0, 120) : null,
     weeklyTargetId: task.weeklyTargetId ? String(task.weeklyTargetId).slice(0, 120) : null
   };
@@ -151,7 +151,13 @@ function readTasks() {
   let tasks = readJson(dataFile(), null);
   if (!Array.isArray(tasks)) tasks = readJson(path.join(app.getPath('userData'), 'tasks.backup.json'), null);
   if (!Array.isArray(tasks)) tasks = readJson(path.join(app.getPath('userData'), 'tasks.backup.2.json'), []);
-  return Array.isArray(tasks) ? tasks.map(normalizeTask).filter(Boolean) : [];
+  const normalized = Array.isArray(tasks) ? tasks.map(normalizeTask).filter(Boolean) : [];
+  if (normalized.some((task) => task.order < -1000000000)) {
+    normalized
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .forEach((task, index) => { task.order = index; });
+  }
+  return normalized;
 }
 
 function writeTasks(tasks) {
@@ -161,7 +167,7 @@ function writeTasks(tasks) {
     const existing = taskMap.get(task.id);
     if (!existing || task.updatedAt >= existing.updatedAt) taskMap.set(task.id, task);
   }
-  const safeTasks = [...taskMap.values()].sort((a, b) => a.order - b.order).slice(0, 5000);
+  const safeTasks = [...taskMap.values()].sort((a, b) => a.order - b.order || a.createdAt - b.createdAt).slice(0, 5000);
   if (fs.existsSync(dataFile())) {
     try {
       const firstBackup = path.join(app.getPath('userData'), 'tasks.backup.json');

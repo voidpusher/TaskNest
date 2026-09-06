@@ -28,7 +28,7 @@ function normalizeTask(task) {
     createdAt,
     completedAt: Number(task.completedAt) || null,
     updatedAt: Number(task.updatedAt) || Number(task.completedAt) || createdAt,
-    order: Number.isFinite(Number(task.order)) ? Number(task.order) : -createdAt,
+    order: Number.isFinite(Number(task.order)) ? Number(task.order) : createdAt,
     archived: Boolean(task.archived),
     deletedAt: Number(task.deletedAt) || null,
     seriesId: task.seriesId || null
@@ -37,6 +37,20 @@ function normalizeTask(task) {
 
 function touch(task) {
   task.updatedAt = Date.now();
+}
+
+function prepareTasks(items) {
+  const normalized = items.map(normalizeTask);
+  if (normalized.some((task) => task.order < -1000000000)) {
+    normalized
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .forEach((task, index) => { task.order = index; });
+  }
+  return normalized;
+}
+
+function nextTaskOrder() {
+  return tasks.length ? Math.max(...tasks.map((task) => task.order)) + 1 : 0;
 }
 
 function nextOccurrenceDate(task) {
@@ -74,6 +88,7 @@ function createNextOccurrence(task) {
     createdAt: now,
     completedAt: null,
     updatedAt: now,
+    order: nextTaskOrder(),
     reminderAt: null,
     seriesId,
     subtasks: task.subtasks.map((item) => ({ ...item, id: `${now}-${Math.random().toString(16).slice(2)}`, done: false, completedAt: null, createdAt: now }))
@@ -120,7 +135,9 @@ async function persist(message, action = null) {
 }
 
 function render() {
-  const todayTasks = tasks.filter((task) => task.date === today && !task.archived);
+  const todayTasks = tasks
+    .filter((task) => task.date === today && !task.archived)
+    .sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
   const complete = todayTasks.filter((task) => task.done).length;
   const percent = todayTasks.length ? Math.round(complete / todayTasks.length * 100) : 0;
   document.getElementById('dateLabel').textContent = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase();
@@ -173,7 +190,7 @@ document.getElementById('quickForm').addEventListener('submit', (event) => {
   const title = quickInput.value.trim();
   if (!title) { quickInput.focus(); return; }
   const now = Date.now();
-  tasks.unshift(normalizeTask({
+  tasks.push(normalizeTask({
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     title,
     description: '',
@@ -191,7 +208,7 @@ document.getElementById('quickForm').addEventListener('submit', (event) => {
     createdAt: now,
     completedAt: null,
     updatedAt: now,
-    order: tasks.length ? Math.min(...tasks.map((task) => task.order)) - 1 : 0
+    order: nextTaskOrder()
   }));
   quickInput.value = '';
   persist('Task saved');
@@ -244,7 +261,7 @@ function applySettings(settings) {
 }
 
 window.tasknest.onTasksChanged(async () => {
-  tasks = (await window.tasknest.loadTasks()).map(normalizeTask);
+  tasks = prepareTasks(await window.tasknest.loadTasks());
   render();
 });
 window.tasknest.onWidgetSettings(applySettings);
@@ -261,12 +278,12 @@ setInterval(async () => {
   const currentDate = localDateKey(new Date());
   if (currentDate === today) return;
   today = currentDate;
-  tasks = (await window.tasknest.loadTasks()).map(normalizeTask);
+  tasks = prepareTasks(await window.tasknest.loadTasks());
   render();
 }, 60000);
 
 async function init() {
-  tasks = (await window.tasknest.loadTasks()).map(normalizeTask);
+  tasks = prepareTasks(await window.tasknest.loadTasks());
   applySettings(await window.tasknest.loadSettings());
   render();
   setTimeout(() => quickInput.focus(), 200);

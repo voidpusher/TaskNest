@@ -133,7 +133,7 @@ function normalizeClientTask(task) {
     createdAt,
     completedAt: Number(task.completedAt) || null,
     updatedAt: Number(task.updatedAt) || Number(task.completedAt) || createdAt,
-    order: Number.isFinite(Number(task.order)) ? Number(task.order) : -createdAt,
+    order: Number.isFinite(Number(task.order)) ? Number(task.order) : createdAt,
     seriesId: task.seriesId || null,
     weeklyTargetId: task.weeklyTargetId || null
   };
@@ -147,12 +147,26 @@ function activeTasks() {
   return tasks.filter((task) => !task.archived);
 }
 
+function prepareTasks(items) {
+  const normalized = items.map(normalizeClientTask);
+  if (normalized.some((task) => task.order < -1000000000)) {
+    normalized
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .forEach((task, index) => { task.order = index; });
+  }
+  return normalized;
+}
+
 function projectById(id) {
   return projects.find((project) => project.id === id && !project.archived);
 }
 
 function sortedTasks(items) {
-  return [...items].sort((a, b) => a.order - b.order || b.createdAt - a.createdAt);
+  return [...items].sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
+}
+
+function nextTaskOrder() {
+  return tasks.length ? Math.max(...tasks.map((task) => task.order)) + 1 : 0;
 }
 
 function viewBaseTasks() {
@@ -224,11 +238,10 @@ async function persistProjects(message, action = null) {
 
 function newTask(title, overrides = {}) {
   const now = Date.now();
-  const lowestOrder = tasks.length ? Math.min(...tasks.map((task) => task.order)) : 0;
   return normalizeClientTask({
     id: uid(), title, description: '', status: 'open', done: false, priority: 'normal', archived: false,
     date: selectedDate, dueTime: null, estimatedMinutes: null, projectId: null, subtasks: [], recurrence: 'none',
-    reminderAt: null, createdAt: now, completedAt: null, updatedAt: now, order: lowestOrder - 1,
+    reminderAt: null, createdAt: now, completedAt: null, updatedAt: now, order: nextTaskOrder(),
     seriesId: null, weeklyTargetId: null, ...overrides
   });
 }
@@ -261,7 +274,7 @@ function createNextOccurrence(task) {
   const next = newTask(task.title, {
     ...task,
     id: uid(), date: nextDate, status: 'open', done: false, archived: false, deletedAt: null,
-    completedAt: null, createdAt: Date.now(), updatedAt: Date.now(), seriesId,
+    completedAt: null, createdAt: Date.now(), updatedAt: Date.now(), order: nextTaskOrder(), seriesId,
     subtasks: task.subtasks.map((subtask) => ({ ...subtask, id: uid('subtask'), done: false, completedAt: null, createdAt: Date.now() })),
     reminderAt: task.reminderAt ? task.reminderAt + dayDelta * 86400000 : null
   });
@@ -587,7 +600,7 @@ function openEditor(task = null) {
 function duplicateTask(task) {
   const duplicate = newTask(`${task.title} copy`, {
     ...task, id: uid(), title: `${task.title} copy`, status: 'open', done: false, archived: false, deletedAt: null,
-    completedAt: null, createdAt: Date.now(), updatedAt: Date.now(), seriesId: null, reminderAt: null,
+    completedAt: null, createdAt: Date.now(), updatedAt: Date.now(), order: nextTaskOrder(), seriesId: null, reminderAt: null,
     subtasks: task.subtasks.map((subtask) => ({ ...subtask, id: uid('subtask'), done: false, completedAt: null, createdAt: Date.now() }))
   });
   tasks.push(duplicate);
@@ -801,7 +814,7 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && selectionMode) { selectionMode = false; selectedTaskIds.clear(); render(); }
 });
 
-window.tasknest.onTasksChanged(async () => { tasks = (await window.tasknest.loadTasks()).map(normalizeClientTask); render(); });
+window.tasknest.onTasksChanged(async () => { tasks = prepareTasks(await window.tasknest.loadTasks()); render(); });
 window.tasknest.onWeeklyTargetsChanged(async () => { weeklyTargets = await window.tasknest.loadWeeklyTargets(); render(); });
 window.tasknest.onProjectsChanged(async () => { projects = await window.tasknest.loadProjects(); render(); });
 window.tasknest.onWidgetSettings((settings) => { widgetEnabled = settings.widgetEnabled; renderWidgetCard(); });
@@ -810,7 +823,7 @@ async function init() {
   const [savedTasks, savedTargets, savedProjects, settings] = await Promise.all([
     window.tasknest.loadTasks(), window.tasknest.loadWeeklyTargets(), window.tasknest.loadProjects(), window.tasknest.loadSettings()
   ]);
-  tasks = savedTasks.map(normalizeClientTask);
+  tasks = prepareTasks(savedTasks);
   weeklyTargets = savedTargets;
   projects = savedProjects;
   widgetEnabled = settings.widgetEnabled;
