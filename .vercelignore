@@ -1,0 +1,13 @@
+.git/
+.runtime-profile*/
+dist*/
+Microsoft/
+node_modules/
+web-dist/
+main.js
+preload.js
+voice-recognition.ps1
+widget.html
+widget.css
+widget.js
+README.md

@@ -1,5 +1,8 @@
 node_modules/
 dist/
+dist-*/
+web-dist/
+dist-*/
 *.log
 .DS_Store
 Thumbs.db

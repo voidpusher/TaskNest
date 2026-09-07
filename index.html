@@ -38,7 +38,7 @@
         <section id="taskView" class="task-view">
           <div class="day-header"><div><p class="eyebrow" id="selectedDayLabel">TODAY</p><h1 id="greetingTitle">Good morning.</h1><p class="day-subtitle" id="listTitle">Here’s what needs your attention today.</p></div><div class="header-progress"><span id="progressCount">0 of 0 completed</span><div class="progress-track"><span id="progressBar"></span></div></div></div>
           <div class="filter-group" aria-label="Filter tasks"><button class="filter active" data-filter="all">All</button><button class="filter" data-filter="active">Open</button><button class="filter" data-filter="done">Done</button></div>
-          <form class="task-form" id="taskForm"><svg class="form-plus" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><input id="taskInput" maxlength="160" autocomplete="off" placeholder="Add a task..." aria-label="New task"><select id="priorityInput" aria-label="Priority"><option value="normal">Normal</option><option value="high">Important</option><option value="low">Whenever</option></select><button class="add-button" type="submit" aria-label="Add task">Add<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></form>
+          <form class="task-form" id="taskForm"><svg class="form-plus" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><input id="taskInput" maxlength="160" autocomplete="off" placeholder="Add a task..." aria-label="New task"><select id="priorityInput" aria-label="Priority"><option value="normal">Normal</option><option value="high">Important</option><option value="low">Whenever</option></select><button class="voice-button" id="voiceButton" type="button" aria-label="Add task with your voice" aria-pressed="false" title="Speak a task"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7"/></svg><span class="voice-pulse" aria-hidden="true"></span></button><button class="add-button" type="submit" aria-label="Add task">Add<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></form>
           <div class="list-heading"><span>Tasks</span><span class="list-heading-actions"><span id="remainingLabel">Nothing pending</span><button id="bulkToggle" class="text-button" type="button">Select</button></span></div>
           <div class="bulk-bar hidden" id="bulkBar"><strong id="bulkCount">0 selected</strong><button data-bulk-action="complete" type="button">Complete</button><label>Move to <input id="bulkDate" type="date" aria-label="Move selected tasks to date"></label><button data-bulk-action="move" type="button">Move</button><button class="bulk-delete" data-bulk-action="delete" type="button">Delete</button><button class="bulk-cancel" data-bulk-action="cancel" type="button">Cancel</button></div>
           <div class="task-list" id="taskList" aria-live="polite"></div>
@@ -87,6 +87,6 @@
   </dialog>
 
   <div class="toast" id="toast" role="status"><span id="toastText">Saved</span><button id="toastUndo" class="hidden">Undo</button></div>
-  <script src="renderer.js?v=1.8.0"></script>
+  <script src="renderer.js?v=1.9.0"></script>
 </body>
 </html>

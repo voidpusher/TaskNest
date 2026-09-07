@@ -1,13 +1,14 @@
 {
   "name": "tasknest",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "A calm desktop to-do list with a resizable widget mode.",
   "main": "main.js",
   "author": "TaskNest",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win nsis"
+    "build": "electron-builder --win nsis",
+    "build:web": "node build-web.js"
   },
   "devDependencies": {
     "electron": "^37.2.0",
@@ -17,6 +18,9 @@
     "appId": "com.tasknest.desktop",
     "productName": "TaskNest",
     "asar": true,
+    "asarUnpack": [
+      "voice-recognition.ps1"
+    ],
     "files": [
       "main.js",
       "preload.js",
@@ -26,6 +30,7 @@
       "widget.html",
       "widget.css",
       "widget.js",
+      "voice-recognition.ps1",
       "assets/**/*"
     ],
     "directories": {

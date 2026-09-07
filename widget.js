@@ -5,11 +5,19 @@ const pinButton = document.getElementById('pinButton');
 const toast = document.getElementById('toast');
 const toastText = document.getElementById('toastText');
 const toastUndo = document.getElementById('toastUndo');
+const widgetVoiceButton = document.getElementById('widgetVoiceButton');
 
 let tasks = [];
 let today = localDateKey(new Date());
 let toastTimer;
 let undoAction = null;
+let voiceRecognition = null;
+let voiceListening = false;
+let voiceSeed = '';
+let voiceHadResult = false;
+let silenceVoiceEnd = false;
+let nativeVoiceActive = false;
+let nativeVoiceCancelled = false;
 
 function normalizeTask(task) {
   const createdAt = Number(task.createdAt) || Date.now();
@@ -120,6 +128,108 @@ function showToast(message, action = null) {
   }, action ? 5000 : 1500);
 }
 
+function setVoiceListening(listening) {
+  voiceListening = listening;
+  widgetVoiceButton.classList.toggle('listening', listening);
+  widgetVoiceButton.setAttribute('aria-pressed', String(listening));
+  widgetVoiceButton.setAttribute('aria-label', listening ? 'Stop listening' : 'Add task with your voice');
+  widgetVoiceButton.title = listening ? 'Listening… click to stop' : 'Speak a task';
+}
+
+function speechErrorMessage(error) {
+  if (error === 'not-allowed' || error === 'service-not-allowed') return 'Allow microphone access and try again';
+  if (error === 'audio-capture') return 'No microphone was found';
+  if (error === 'network') return 'Voice recognition needs internet';
+  if (error === 'no-speech') return 'I didn’t hear anything';
+  if (error === 'language') return 'Speech language is not installed';
+  if (error === 'busy') return 'Microphone is already in use';
+  return 'Voice recognition could not start';
+}
+
+function stopVoiceInput(silent = false) {
+  silenceVoiceEnd = silent;
+  if (nativeVoiceActive) {
+    nativeVoiceCancelled = true;
+    window.tasknest.cancelVoice?.();
+    setVoiceListening(false);
+    return;
+  }
+  if (voiceRecognition && voiceListening) voiceRecognition.stop();
+}
+
+async function toggleVoiceInput() {
+  if (voiceListening) return stopVoiceInput();
+
+  if (typeof window.tasknest.recognizeVoice === 'function') {
+    voiceSeed = quickInput.value.trim();
+    voiceHadResult = false;
+    silenceVoiceEnd = false;
+    nativeVoiceActive = true;
+    nativeVoiceCancelled = false;
+    setVoiceListening(true);
+    const result = await window.tasknest.recognizeVoice(navigator.language || 'en-US');
+    const cancelled = nativeVoiceCancelled;
+    nativeVoiceActive = false;
+    setVoiceListening(false);
+    quickInput.focus();
+    if (cancelled) {
+      if (!silenceVoiceEnd) showToast('Listening stopped');
+      return;
+    }
+    if (!result?.ok) return showToast(speechErrorMessage(result?.error));
+    const spoken = String(result.text || '').trim();
+    if (!spoken) return showToast('I didn’t hear anything');
+    voiceHadResult = true;
+    quickInput.value = `${voiceSeed}${voiceSeed ? ' ' : ''}${spoken}`.slice(0, quickInput.maxLength);
+    quickInput.dispatchEvent(new Event('input', { bubbles: true }));
+    showToast('Voice captured — press + to save');
+    return;
+  }
+
+  const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognitionApi) {
+    quickInput.focus();
+    showToast('Press Win + H for voice typing');
+    return;
+  }
+
+  voiceSeed = quickInput.value.trim();
+  voiceHadResult = false;
+  silenceVoiceEnd = false;
+  voiceRecognition = new SpeechRecognitionApi();
+  voiceRecognition.lang = navigator.language || 'en-US';
+  voiceRecognition.continuous = false;
+  voiceRecognition.interimResults = true;
+  voiceRecognition.maxAlternatives = 1;
+  voiceRecognition.onstart = () => setVoiceListening(true);
+  voiceRecognition.onresult = (event) => {
+    const spoken = Array.from(event.results).map((result) => result[0]?.transcript || '').join(' ').trim();
+    if (!spoken) return;
+    voiceHadResult = true;
+    quickInput.value = `${voiceSeed}${voiceSeed ? ' ' : ''}${spoken}`.slice(0, quickInput.maxLength);
+    quickInput.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  voiceRecognition.onerror = (event) => {
+    if (event.error === 'aborted') return;
+    silenceVoiceEnd = true;
+    showToast(speechErrorMessage(event.error));
+  };
+  voiceRecognition.onend = () => {
+    setVoiceListening(false);
+    voiceRecognition = null;
+    quickInput.focus();
+    if (!silenceVoiceEnd) showToast(voiceHadResult ? 'Voice captured — press + to save' : 'Listening stopped');
+  };
+
+  try {
+    voiceRecognition.start();
+  } catch {
+    voiceRecognition = null;
+    setVoiceListening(false);
+    showToast('Voice recognition is already starting');
+  }
+}
+
 toastUndo.addEventListener('click', () => {
   if (!undoAction) return;
   const action = undoAction;
@@ -187,6 +297,7 @@ function beginInlineEdit(item, index) {
 
 document.getElementById('quickForm').addEventListener('submit', (event) => {
   event.preventDefault();
+  stopVoiceInput(true);
   const title = quickInput.value.trim();
   if (!title) { quickInput.focus(); return; }
   const now = Date.now();
@@ -215,6 +326,8 @@ document.getElementById('quickForm').addEventListener('submit', (event) => {
   render();
   quickInput.focus();
 });
+
+widgetVoiceButton.addEventListener('click', toggleVoiceInput);
 
 widgetList.addEventListener('click', (event) => {
   const button = event.target.closest('[data-action]');

@@ -5,12 +5,13 @@ TaskNest is a private Windows daily planner with a separate, resizable desktop w
 ## Install
 
 1. Open the `dist` folder.
-2. Run `TaskNest-Setup-1.8.0.exe`.
+2. Run `TaskNest-Setup-1.9.0.exe`.
 3. Choose an install location. The installer creates a desktop shortcut.
 
 ## Use
 
 - Choose a date, type a task, and press Enter or the **Add** button. Every task is saved under that date.
+- Click the microphone beside the task field, speak naturally, review the transcription, and press **Add**. Voice entry is available in both the planner and desktop widget.
 - Use **Inbox**, **Today**, **Upcoming**, **Overdue**, and **Completed** to manage tasks by state and schedule.
 - Open a task to add a description, status, due time, estimate, project, subtasks, recurrence, and reminder.
 - Drag task rows to reorder them, or use **Select** to complete, move, or delete several tasks together.

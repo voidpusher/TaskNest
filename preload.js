@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('tasknest', {
   openMain: () => ipcRenderer.invoke('window:open-main'),
   minimizeWidget: () => ipcRenderer.invoke('window:minimize-widget'),
   closeWidget: () => ipcRenderer.invoke('window:close-widget'),
+  recognizeVoice: (language) => ipcRenderer.invoke('voice:recognize', language),
+  cancelVoice: () => ipcRenderer.invoke('voice:cancel'),
   onTasksChanged: (callback) => ipcRenderer.on('tasks:changed', callback),
   onWeeklyTargetsChanged: (callback) => ipcRenderer.on('targets:changed', callback),
   onProjectsChanged: (callback) => ipcRenderer.on('projects:changed', callback),

@@ -1420,6 +1420,41 @@ h1 { color: var(--ink); font-size: clamp(32px, 3vw, 40px); font-weight: 650; }
   .duplicate-task { display: none; }
 }
 
+/* Voice quick-add */
+.task-form { grid-template-columns: 20px minmax(0, 1fr) 96px 36px auto; }
+.voice-button {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #d4dcd9;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: #62737b;
+  background: #f5f7f6;
+  cursor: pointer;
+  transition: color .18s ease, border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.voice-button:hover { border-color: #aab9b3; color: #0a84ff; background: #eef6ff; transform: translateY(-1px); }
+.voice-button svg { position: relative; z-index: 1; width: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.voice-pulse { position: absolute; inset: 4px; border-radius: 50%; background: rgba(255, 69, 58, .14); opacity: 0; transform: scale(.65); }
+.voice-button.listening { border-color: rgba(255, 69, 58, .45); color: #d9362b; background: #fff2f0; }
+.voice-button.listening .voice-pulse { animation: voicePulse 1.25s ease-out infinite; }
+.task-form.voice-listening { border-color: rgba(255, 69, 58, .55); box-shadow: 0 0 0 2px rgba(255,69,58,.09); }
+@keyframes voicePulse { 0% { opacity: .75; transform: scale(.55); } 75%, 100% { opacity: 0; transform: scale(1.25); } }
+
+@media (max-width: 700px) {
+  .task-form { grid-template-columns: 20px minmax(0, 1fr) 36px auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-button.listening .voice-pulse { animation: none; opacity: .55; transform: scale(1); }
+}
+
+.web-runtime .title-widget-button,
+.web-runtime .desktop-widget-card { display: none; }
+
 @media (max-width: 700px) {
   .detail-grid.three,
   .detail-grid.two,

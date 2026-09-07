@@ -1,4 +1,5 @@
 if (!window.tasknest) {
+  document.documentElement.classList.add('web-runtime');
   const keys = {
     tasks: 'tasknest-browser-tasks',
     settings: 'tasknest-browser-settings',
@@ -51,6 +52,7 @@ const weeklyTargetList = $('weeklyTargetList');
 const projectForm = $('projectForm');
 const projectGrid = $('projectGrid');
 const bulkBar = $('bulkBar');
+const voiceButton = $('voiceButton');
 
 let tasks = [];
 let weeklyTargets = [];
@@ -67,6 +69,13 @@ let selectedTaskIds = new Set();
 let draggedTaskId = null;
 let toastTimer;
 let undoAction = null;
+let voiceRecognition = null;
+let voiceListening = false;
+let voiceSeed = '';
+let voiceHadResult = false;
+let silenceVoiceEnd = false;
+let nativeVoiceActive = false;
+let nativeVoiceCancelled = false;
 
 const icon = {
   check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 12 4 4 8-9"/></svg>',
@@ -219,6 +228,109 @@ function showToast(message, action = null) {
   toastUndo.classList.toggle('hidden', !action);
   toast.classList.add('show');
   toastTimer = setTimeout(() => { toast.classList.remove('show'); undoAction = null; }, action ? 6000 : 1900);
+}
+
+function setVoiceListening(listening) {
+  voiceListening = listening;
+  voiceButton.classList.toggle('listening', listening);
+  voiceButton.setAttribute('aria-pressed', String(listening));
+  voiceButton.setAttribute('aria-label', listening ? 'Stop listening' : 'Add task with your voice');
+  voiceButton.title = listening ? 'Listening… click to stop' : 'Speak a task';
+  taskForm.classList.toggle('voice-listening', listening);
+}
+
+function speechErrorMessage(error) {
+  if (error === 'not-allowed' || error === 'service-not-allowed') return 'Microphone blocked — allow microphone access and try again';
+  if (error === 'audio-capture') return 'No microphone was found';
+  if (error === 'network') return 'Voice recognition needs an internet connection';
+  if (error === 'no-speech') return 'I didn’t hear anything — try again';
+  if (error === 'language') return 'Windows speech recognition language is not installed';
+  if (error === 'busy') return 'The microphone is already in use';
+  return 'Voice recognition could not start';
+}
+
+function stopVoiceInput(silent = false) {
+  silenceVoiceEnd = silent;
+  if (nativeVoiceActive) {
+    nativeVoiceCancelled = true;
+    window.tasknest.cancelVoice?.();
+    setVoiceListening(false);
+    return;
+  }
+  if (voiceRecognition && voiceListening) voiceRecognition.stop();
+}
+
+async function toggleVoiceInput() {
+  if (voiceListening) return stopVoiceInput();
+
+  if (typeof window.tasknest.recognizeVoice === 'function') {
+    voiceSeed = taskInput.value.trim();
+    voiceHadResult = false;
+    silenceVoiceEnd = false;
+    nativeVoiceActive = true;
+    nativeVoiceCancelled = false;
+    setVoiceListening(true);
+    const result = await window.tasknest.recognizeVoice(navigator.language || 'en-US');
+    const cancelled = nativeVoiceCancelled;
+    nativeVoiceActive = false;
+    setVoiceListening(false);
+    taskInput.focus();
+    if (cancelled) {
+      if (!silenceVoiceEnd) showToast('Listening stopped');
+      return;
+    }
+    if (!result?.ok) return showToast(speechErrorMessage(result?.error));
+    const spoken = String(result.text || '').trim();
+    if (!spoken) return showToast('I didn’t hear anything — try again');
+    voiceHadResult = true;
+    taskInput.value = `${voiceSeed}${voiceSeed ? ' ' : ''}${spoken}`.slice(0, taskInput.maxLength);
+    taskInput.dispatchEvent(new Event('input', { bubbles: true }));
+    showToast('Voice captured — review it, then press Add');
+    return;
+  }
+
+  const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognitionApi) {
+    taskInput.focus();
+    showToast('Voice recognition is unavailable here — press Win + H for Windows voice typing');
+    return;
+  }
+
+  voiceSeed = taskInput.value.trim();
+  voiceHadResult = false;
+  silenceVoiceEnd = false;
+  voiceRecognition = new SpeechRecognitionApi();
+  voiceRecognition.lang = navigator.language || 'en-US';
+  voiceRecognition.continuous = false;
+  voiceRecognition.interimResults = true;
+  voiceRecognition.maxAlternatives = 1;
+  voiceRecognition.onstart = () => setVoiceListening(true);
+  voiceRecognition.onresult = (event) => {
+    const spoken = Array.from(event.results).map((result) => result[0]?.transcript || '').join(' ').trim();
+    if (!spoken) return;
+    voiceHadResult = true;
+    taskInput.value = `${voiceSeed}${voiceSeed ? ' ' : ''}${spoken}`.slice(0, taskInput.maxLength);
+    taskInput.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  voiceRecognition.onerror = (event) => {
+    if (event.error === 'aborted') return;
+    silenceVoiceEnd = true;
+    showToast(speechErrorMessage(event.error));
+  };
+  voiceRecognition.onend = () => {
+    setVoiceListening(false);
+    voiceRecognition = null;
+    taskInput.focus();
+    if (!silenceVoiceEnd) showToast(voiceHadResult ? 'Voice captured — review it, then press Add' : 'Listening stopped');
+  };
+
+  try {
+    voiceRecognition.start();
+  } catch {
+    voiceRecognition = null;
+    setVoiceListening(false);
+    showToast('Voice recognition is already starting');
+  }
 }
 
 async function persist(message, action = null) {
@@ -624,7 +736,8 @@ function softDeleteTasks(taskIds, message = 'Task deleted') {
   render();
 }
 
-taskForm.addEventListener('submit', (event) => { event.preventDefault(); addQuickTask(taskInput.value, priorityInput.value); taskInput.value = ''; });
+taskForm.addEventListener('submit', (event) => { event.preventDefault(); stopVoiceInput(true); addQuickTask(taskInput.value, priorityInput.value); taskInput.value = ''; });
+voiceButton.addEventListener('click', toggleVoiceInput);
 $('newTaskButton').addEventListener('click', () => openEditor());
 
 taskList.addEventListener('click', (event) => {

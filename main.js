@@ -1,9 +1,11 @@
-const { app, BrowserWindow, ipcMain, screen, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Notification, session } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 
 let mainWindow;
 let widgetWindow;
+let voiceRecognitionProcess;
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
@@ -201,6 +203,43 @@ function checkReminders() {
   if (changed) writeJson(reminderLogFile(), [...notified].slice(-1000));
 }
 
+function recognizeVoice(language) {
+  return new Promise((resolve) => {
+    if (voiceRecognitionProcess) return resolve({ ok: false, error: 'busy' });
+    const culture = /^[a-z]{2,3}(?:-[A-Z]{2})?$/.test(language || '') ? language : 'en-US';
+    const powershell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    const bundledScript = path.join(__dirname, 'voice-recognition.ps1');
+    const speechScript = app.isPackaged ? bundledScript.replace('app.asar', 'app.asar.unpacked') : bundledScript;
+    const child = spawn(powershell, [
+      '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+      '-File', speechScript, '-CultureName', culture, '-TimeoutSeconds', '10'
+    ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    voiceRecognitionProcess = child;
+    let stdout = '';
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(watchdog);
+      if (voiceRecognitionProcess === child) voiceRecognitionProcess = null;
+      resolve(result);
+    };
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.on('error', () => finish({ ok: false, error: 'unavailable' }));
+    child.on('close', (code) => {
+      const text = stdout.trim().slice(0, 160);
+      if (code === 0 && text) return finish({ ok: true, text });
+      if (code === 3) return finish({ ok: false, error: 'no-speech' });
+      finish({ ok: false, error: code === 2 ? 'language' : 'audio-capture' });
+    });
+    const watchdog = setTimeout(() => {
+      child.kill();
+      finish({ ok: false, error: 'no-speech' });
+    }, 15000);
+  });
+}
+
 function readSettings() {
   return { widgetEnabled: false, widgetPinned: true, widgetBounds: null, ...readJson(settingsFile(), {}) };
 }
@@ -289,6 +328,15 @@ function createWidgetWindow() {
 }
 
 app.whenReady().then(() => {
+  const isLocalTaskNest = (webContents) => Boolean(webContents && webContents.getURL().startsWith('file://'));
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, _origin, details) => (
+    isLocalTaskNest(webContents) && permission === 'media' && (!details?.mediaType || details.mediaType === 'audio')
+  ));
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    const mediaTypes = Array.isArray(details?.mediaTypes) ? details.mediaTypes : [];
+    const audioOnly = mediaTypes.length === 0 || mediaTypes.every((type) => type === 'audio');
+    callback(isLocalTaskNest(webContents) && permission === 'media' && audioOnly);
+  });
   createMainWindow();
   if (readSettings().widgetEnabled) createWidgetWindow();
   checkReminders();
@@ -317,6 +365,13 @@ ipcMain.handle('targets:load', () => readTargets());
 ipcMain.handle('targets:save', (_event, targets) => writeTargets(targets));
 ipcMain.handle('projects:load', () => readProjects());
 ipcMain.handle('projects:save', (_event, projects) => writeProjects(projects));
+ipcMain.handle('voice:recognize', (_event, language) => recognizeVoice(language));
+ipcMain.handle('voice:cancel', () => {
+  if (!voiceRecognitionProcess) return false;
+  voiceRecognitionProcess.kill();
+  voiceRecognitionProcess = null;
+  return true;
+});
 
 ipcMain.handle('widget:open', () => {
   saveSettings({ widgetEnabled: true });

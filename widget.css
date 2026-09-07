@@ -63,3 +63,14 @@ form button { background:linear-gradient(135deg,#f0d276,#df7b66);color:#2a2114;b
 .inline-edit { width:100%;min-width:0;height:30px;padding:0 7px;border:1px solid rgba(232,201,104,.45);border-radius:7px;outline:none;background:rgba(20,22,19,.82);color:var(--text);font-size:12px;user-select:text;box-shadow:0 0 0 3px rgba(232,201,104,.08); }
 .toast { display:flex;align-items:center;gap:8px; }
 .toast button { padding:0;border:0;background:transparent;color:var(--yellow);font-size:9px;font-weight:600;cursor:pointer; }
+
+/* Voice quick-add */
+form { grid-template-columns:minmax(0,1fr) 38px 38px; }
+form .voice-button { position:relative;overflow:visible;border:1px solid rgba(255,244,220,.16);color:#e8ded0;background:rgba(29,31,28,.76);box-shadow:none; }
+form .voice-button:hover { transform:translateY(-1px);color:var(--yellow);border-color:rgba(232,201,104,.4);background:rgba(48,47,39,.8);filter:none; }
+form .voice-button span { position:absolute;inset:4px;border-radius:50%;background:rgba(239,113,99,.2);opacity:0;transform:scale(.6); }
+form .voice-button svg { position:relative;z-index:1;width:16px;stroke-width:1.8; }
+form .voice-button.listening { color:#ff8c7f;border-color:rgba(239,113,99,.55);background:rgba(80,36,33,.75); }
+form .voice-button.listening span { animation:widgetVoicePulse 1.25s ease-out infinite; }
+@keyframes widgetVoicePulse { 0% { opacity:.85;transform:scale(.55); } 75%,100% { opacity:0;transform:scale(1.3); } }
+@media (prefers-reduced-motion:reduce) { form .voice-button.listening span { animation:none;opacity:.55;transform:scale(1); } }
