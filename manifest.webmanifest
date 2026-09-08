@@ -1,0 +1,17 @@
+{
+  "name": "TaskNest",
+  "short_name": "TaskNest",
+  "description": "A calm daily planner with focus sessions, recurrence, and reminders.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eef2f3",
+  "theme_color": "#0a84ff",
+  "icons": [
+    {
+      "src": "/assets/tasknest-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

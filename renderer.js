@@ -19,6 +19,7 @@ if (!window.tasknest) {
     loadTasks: async () => read(keys.tasks, starterTasks),
     saveTasks: async (items) => write(keys.tasks, items),
     loadSettings: async () => read(keys.settings, { widgetEnabled: false }),
+    saveSettings: async (settings) => { const next = { ...read(keys.settings, {}), ...settings }; write(keys.settings, next); return next; },
     loadWeeklyTargets: async () => read(keys.targets, []),
     saveWeeklyTargets: async (items) => write(keys.targets, items),
     loadProjects: async () => read(keys.projects, []),
@@ -28,6 +29,7 @@ if (!window.tasknest) {
     onTasksChanged: () => {},
     onWeeklyTargetsChanged: () => {},
     onProjectsChanged: () => {},
+    onReminderDue: () => {},
     onWidgetSettings: () => {}
   };
 }
@@ -67,8 +69,12 @@ let activeView = 'today';
 let activeFilter = 'all';
 let searchQuery = '';
 let widgetEnabled = false;
+let timeTarget = null;
+let timeTargetTimer = null;
 let editingTaskId = null;
 let editingSubtasks = [];
+let editingReminders = [];
+let editingWeekdays = [];
 let selectionMode = false;
 let selectedTaskIds = new Set();
 let draggedTaskId = null;
@@ -90,6 +96,9 @@ let focusTaskId = null;
 let recoveryTaskId = null;
 let focusTimerInterval = null;
 let focusNoteTimer = null;
+let activeReminder = null;
+let reminderCheckTimer = null;
+const shownReminderKeys = new Set();
 
 const VOICE_LANGUAGE_KEY = 'tasknest-voice-language';
 
@@ -121,6 +130,38 @@ function parseDate(key) {
 
 function validDateKey(key) {
   return /^\d{4}-\d{2}-\d{2}$/.test(key || '') && localDateKey(parseDate(key)) === key;
+}
+
+function normalizedRecurrenceRule(task, date = null) {
+  const recurrence = ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'custom'].includes(task?.recurrence) ? task.recurrence : 'none';
+  const raw = task?.recurrenceRule && typeof task.recurrenceRule === 'object' ? task.recurrenceRule : {};
+  const fallbackFrequency = recurrence === 'weekly' || recurrence === 'weekdays' ? 'week' : recurrence === 'monthly' ? 'month' : 'day';
+  const fallbackWeekdays = recurrence === 'weekdays' ? [1, 2, 3, 4, 5] : [];
+  const weekdays = [...new Set((Array.isArray(raw.weekdays) ? raw.weekdays : fallbackWeekdays).map(Number).filter((day) => day >= 0 && day <= 6))].sort();
+  const anchorDate = validDateKey(raw.anchorDate) ? raw.anchorDate : validDateKey(date || task?.date) ? (date || task.date) : null;
+  return {
+    frequency: ['day', 'week', 'month'].includes(raw.frequency) ? raw.frequency : fallbackFrequency,
+    interval: Math.max(1, Math.min(99, Math.round(Number(raw.interval) || 1))),
+    weekdays,
+    anchorDay: Math.max(1, Math.min(31, Math.round(Number(raw.anchorDay) || 0))) || (anchorDate ? parseDate(anchorDate).getDate() : null),
+    anchorDate
+  };
+}
+
+function normalizeClientReminders(task) {
+  const source = Array.isArray(task?.reminders) ? task.reminders : task?.reminderAt ? [{ id: `legacy-${task.reminderAt}`, kind: 'exact', at: task.reminderAt }] : [];
+  const seen = new Set();
+  return source.slice(0, 10).map((reminder) => {
+    if (!reminder || typeof reminder !== 'object') return null;
+    const kind = reminder.kind === 'before' ? 'before' : 'exact';
+    const minutesBefore = kind === 'before' ? Math.max(0, Math.min(525600, Math.round(Number(reminder.minutesBefore) || 0))) : null;
+    const at = kind === 'exact' ? Number(reminder.at) || null : null;
+    if (kind === 'exact' && !at) return null;
+    const id = String(reminder.id || uid('reminder'));
+    if (seen.has(id)) return null;
+    seen.add(id);
+    return { id, kind, minutesBefore, at, snoozedUntil: Number(reminder.snoozedUntil) || null, dismissedAt: Number(reminder.dismissedAt) || null, lastTriggeredAt: Number(reminder.lastTriggeredAt) || null };
+  }).filter(Boolean);
 }
 
 function formatDay(key, options) {
@@ -155,12 +196,15 @@ function normalizeClientTask(task) {
     estimatedMinutes: Number(task.estimatedMinutes) || null,
     projectId: task.projectId || null,
     subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
-    recurrence: ['none', 'daily', 'weekdays', 'weekly', 'monthly'].includes(task.recurrence) ? task.recurrence : 'none',
-    reminderAt: Number(task.reminderAt) || null,
+    recurrence: ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'custom'].includes(task.recurrence) ? task.recurrence : 'none',
+    recurrenceRule: normalizedRecurrenceRule(task),
+    reminders: normalizeClientReminders(task),
+    reminderAt: null,
     createdAt,
     completedAt: Number(task.completedAt) || null,
     updatedAt: Number(task.updatedAt) || Number(task.completedAt) || createdAt,
     order: Number.isFinite(Number(task.order)) ? Number(task.order) : createdAt,
+    occurrenceKey: task.occurrenceKey || null,
     seriesId: task.seriesId || null,
     weeklyTargetId: task.weeklyTargetId || null,
     actualSeconds: Math.max(0, Math.round(Number(task.actualSeconds) || 0)),
@@ -467,27 +511,57 @@ function newTask(title, overrides = {}) {
   return normalizeClientTask({
     id: uid(), title, description: '', status: 'open', done: false, priority: 'normal', archived: false,
     date: selectedDate, dueTime: null, estimatedMinutes: null, projectId: null, subtasks: [], recurrence: 'none',
-    reminderAt: null, createdAt: now, completedAt: null, updatedAt: now, order: nextTaskOrder(),
+    recurrenceRule: normalizedRecurrenceRule({ recurrence: 'none' }, selectedDate), reminders: [], reminderAt: null,
+    createdAt: now, completedAt: null, updatedAt: now, order: nextTaskOrder(), occurrenceKey: null,
     seriesId: null, weeklyTargetId: null, actualSeconds: 0, focusNotes: '', focusSessions: [], activeSession: null, ...overrides
   });
 }
 
+function startOfWeek(date) {
+  const copy = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const weekday = copy.getDay() || 7;
+  copy.setDate(copy.getDate() - weekday + 1);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
 function nextOccurrenceDate(task) {
   if (!task.date || task.recurrence === 'none') return null;
+  const rule = normalizedRecurrenceRule(task);
   const date = parseDate(task.date);
-  if (task.recurrence === 'daily') date.setDate(date.getDate() + 1);
-  if (task.recurrence === 'weekly') date.setDate(date.getDate() + 7);
-  if (task.recurrence === 'monthly') {
-    const preferredDay = date.getDate();
+  const frequency = task.recurrence === 'daily' ? 'day' : task.recurrence === 'weekly' || task.recurrence === 'weekdays' ? 'week' : task.recurrence === 'monthly' ? 'month' : rule.frequency;
+  const interval = task.recurrence === 'custom' ? rule.interval : 1;
+  if (frequency === 'day') date.setDate(date.getDate() + interval);
+  if (frequency === 'month') {
+    const preferredDay = rule.anchorDay || date.getDate();
     date.setDate(1);
-    date.setMonth(date.getMonth() + 1);
+    date.setMonth(date.getMonth() + interval);
     const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
     date.setDate(Math.min(preferredDay, lastDay));
   }
-  if (task.recurrence === 'weekdays') {
-    do { date.setDate(date.getDate() + 1); } while ([0, 6].includes(date.getDay()));
+  if (frequency === 'week') {
+    const selectedDays = rule.weekdays.length ? rule.weekdays : task.recurrence === 'weekdays' ? [1, 2, 3, 4, 5] : [date.getDay()];
+    const anchorWeek = startOfWeek(parseDate(rule.anchorDate || task.date));
+    let attempts = 0;
+    do {
+      date.setDate(date.getDate() + 1);
+      const weeksFromAnchor = Math.floor((startOfWeek(date) - anchorWeek) / 604800000);
+      if (weeksFromAnchor >= 0 && weeksFromAnchor % interval === 0 && selectedDays.includes(date.getDay())) break;
+      attempts += 1;
+    } while (attempts < 3700);
   }
   return localDateKey(date);
+}
+
+function shiftExactReminder(timestamp, fromDate, toDate) {
+  const original = new Date(timestamp);
+  const target = parseDate(toDate);
+  target.setHours(original.getHours(), original.getMinutes(), original.getSeconds(), 0);
+  if (localDateKey(original) !== fromDate) {
+    const dayOffset = Math.round((parseDate(localDateKey(original)) - parseDate(fromDate)) / 86400000);
+    target.setDate(target.getDate() + dayOffset);
+  }
+  return target.getTime();
 }
 
 function createNextOccurrence(task) {
@@ -495,19 +569,39 @@ function createNextOccurrence(task) {
   if (!nextDate) return null;
   const seriesId = task.seriesId || task.id;
   task.seriesId = seriesId;
-  if (activeTasks().some((item) => item.seriesId === seriesId && item.date === nextDate)) return null;
-  const dayDelta = Math.round((parseDate(nextDate) - parseDate(task.date)) / 86400000);
+  const occurrenceKey = `${seriesId}:${nextDate}`;
+  if (tasks.some((item) => item.id !== task.id && (item.occurrenceKey === occurrenceKey || (item.seriesId === seriesId && item.date === nextDate)))) return null;
+  const nextDueTime = task.dueTime ? nearestAvailableTime(nextDate, task.dueTime) : null;
   const next = newTask(task.title, {
     ...task,
-    id: uid(), date: nextDate, status: 'open', done: false, archived: false, deletedAt: null,
-    completedAt: null, createdAt: Date.now(), updatedAt: Date.now(), order: nextTaskOrder(), seriesId,
+    id: uid(), date: nextDate, dueTime: nextDueTime, status: 'open', done: false, archived: false, deletedAt: null,
+    completedAt: null, createdAt: Date.now(), updatedAt: Date.now(), order: nextTaskOrder(), seriesId, occurrenceKey,
     subtasks: task.subtasks.map((subtask) => ({ ...subtask, id: uid('subtask'), done: false, completedAt: null, createdAt: Date.now() })),
-    reminderAt: task.reminderAt ? task.reminderAt + dayDelta * 86400000 : null,
+    reminders: task.reminders.map((reminder) => ({ ...reminder, id: uid('reminder'), at: reminder.kind === 'exact' ? shiftExactReminder(reminder.at, task.date, nextDate) : null, snoozedUntil: null, dismissedAt: null, lastTriggeredAt: null })),
+    reminderAt: null,
     actualSeconds: 0, focusNotes: '', focusSessions: [], activeSession: null
   });
   tasks.push(next);
   touch(task);
   return next;
+}
+
+function rescheduleTask(task, nextDate) {
+  const previousDate = task.date;
+  const conflict = timedTaskConflict(nextDate, task.dueTime, task.id);
+  if (conflict) return conflict;
+  if (previousDate && nextDate && previousDate !== nextDate) {
+    task.reminders = task.reminders.map((reminder) => ({
+      ...reminder,
+      at: reminder.kind === 'exact' ? shiftExactReminder(reminder.at, previousDate, nextDate) : null,
+      snoozedUntil: null,
+      dismissedAt: null,
+      lastTriggeredAt: null
+    }));
+  }
+  task.date = nextDate;
+  touch(task);
+  return null;
 }
 
 function setTaskCompletion(task, done) {
@@ -569,8 +663,74 @@ function taskDateLabel(task) {
   return formatDay(task.date, { month: 'short', day: 'numeric' });
 }
 
-function recurrenceLabel(value) {
-  return { daily: 'Daily', weekdays: 'Weekdays', weekly: 'Weekly', monthly: 'Monthly' }[value] || '';
+function recurrenceLabel(value, rule = null) {
+  if (value === 'none') return '';
+  if (value === 'daily') return 'Daily';
+  if (value === 'weekly') return 'Weekly';
+  if (value === 'monthly') return 'Monthly';
+  if (value === 'weekdays') {
+    const days = (rule?.weekdays?.length ? rule.weekdays : [1, 2, 3, 4, 5]).map((day) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day]);
+    return days.join(', ');
+  }
+  if (value === 'custom') {
+    const interval = rule?.interval || 1;
+    const unit = rule?.frequency || 'day';
+    const base = `Every ${interval === 1 ? '' : `${interval} `}${unit}${interval === 1 ? '' : 's'}`;
+    if (unit === 'week' && rule?.weekdays?.length) return `${base} · ${rule.weekdays.map((day) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day]).join(', ')}`;
+    return base;
+  }
+  return '';
+}
+
+function taskDeadline(task) {
+  if (!task.date) return null;
+  const date = parseDate(task.date);
+  const [hour, minute] = (task.dueTime || '09:00').split(':').map(Number);
+  date.setHours(hour, minute, 0, 0);
+  return date.getTime();
+}
+
+function minutesFromTime(value) {
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value || '')) return null;
+  const [hour, minute] = value.split(':').map(Number);
+  return hour * 60 + minute;
+}
+
+function timedTaskConflict(date, time, excludeId = null) {
+  const minutes = minutesFromTime(time);
+  if (!date || minutes === null) return null;
+  return activeTasks().find((task) => task.id !== excludeId && !task.done && task.date === date && task.dueTime && Math.abs(minutesFromTime(task.dueTime) - minutes) < 120) || null;
+}
+
+function nearestAvailableTime(date, preferredTime, excludeId = null) {
+  const preferred = minutesFromTime(preferredTime);
+  if (preferred === null) return null;
+  for (let offset = 0; offset <= 1440; offset += 30) {
+    const candidates = offset ? [preferred + offset, preferred - offset] : [preferred];
+    for (const candidate of candidates) {
+      if (candidate < 0 || candidate >= 1440) continue;
+      const value = `${String(Math.floor(candidate / 60)).padStart(2, '0')}:${String(candidate % 60).padStart(2, '0')}`;
+      if (!timedTaskConflict(date, value, excludeId)) return value;
+    }
+  }
+  return null;
+}
+
+function effectiveReminderAt(task, reminder) {
+  if (reminder.snoozedUntil) return reminder.snoozedUntil;
+  if (reminder.kind === 'exact') return reminder.at;
+  const deadline = taskDeadline(task);
+  return deadline ? deadline - reminder.minutesBefore * 60000 : null;
+}
+
+function formatReminderLabel(task, reminder) {
+  if (reminder.snoozedUntil) return `Snoozed until ${formatTimestamp(reminder.snoozedUntil)}`;
+  if (reminder.kind === 'exact') return formatTimestamp(reminder.at);
+  if (reminder.minutesBefore === 0) return 'At deadline';
+  if (reminder.minutesBefore < 60) return `${reminder.minutesBefore} minutes before`;
+  if (reminder.minutesBefore % 1440 === 0) return `${reminder.minutesBefore / 1440} day${reminder.minutesBefore === 1440 ? '' : 's'} before`;
+  if (reminder.minutesBefore % 60 === 0) return `${reminder.minutesBefore / 60} hour${reminder.minutesBefore === 60 ? '' : 's'} before`;
+  return formatTimestamp(effectiveReminderAt(task, reminder));
 }
 
 function taskMetaHtml(task) {
@@ -580,8 +740,8 @@ function taskMetaHtml(task) {
   if (task.estimatedMinutes) pieces.push(`<span>${task.estimatedMinutes >= 60 ? `${task.estimatedMinutes / 60}h` : `${task.estimatedMinutes}m`}</span>`);
   const project = projectById(task.projectId);
   if (project) pieces.push(`<span class="project-meta" data-project-color="${escapeHtml(project.color)}">${escapeHtml(project.name)}</span>`);
-  if (task.recurrence !== 'none') pieces.push(`<span>↻ ${recurrenceLabel(task.recurrence)}</span>`);
-  if (task.reminderAt) pieces.push('<span>◷ Reminder</span>');
+  if (task.recurrence !== 'none') pieces.push(`<span>↻ ${escapeHtml(recurrenceLabel(task.recurrence, task.recurrenceRule))}</span>`);
+  if (task.reminders.length) pieces.push(`<span>◷ ${task.reminders.length} reminder${task.reminders.length === 1 ? '' : 's'}</span>`);
   if (task.subtasks.length) pieces.push(`<span>${task.subtasks.filter((item) => item.done).length}/${task.subtasks.length} steps</span>`);
   if (task.weeklyTargetId) pieces.push('<span>Weekly target</span>');
   if (task.actualSeconds) pieces.push(`<span>${formatCompactDuration(task.actualSeconds)} focused</span>`);
@@ -871,6 +1031,116 @@ function renderWidgetCard() {
   $('desktopWidgetButton').classList.toggle('active', widgetEnabled);
 }
 
+function upcomingReminders() {
+  const now = Date.now();
+  return activeTasks().filter((task) => !task.done).flatMap((task) => task.reminders
+    .filter((reminder) => !reminder.dismissedAt && effectiveReminderAt(task, reminder))
+    .map((reminder) => ({ task, reminder, at: effectiveReminderAt(task, reminder) })))
+    .filter((entry) => entry.at >= now)
+    .sort((a, b) => a.at - b.at);
+}
+
+function renderReminderCard() {
+  const upcoming = upcomingReminders();
+  $('reminderCardCount').textContent = upcoming.length ? `${upcoming.length} scheduled` : 'None scheduled';
+  $('reminderPreviewList').innerHTML = upcoming.length ? upcoming.slice(0, 3).map(({ task, at }) => `<button type="button" data-reminder-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.title)}</span><small>${escapeHtml(formatTimestamp(at))}</small></button>`).join('') : '<p>No upcoming reminders.</p>';
+  const permissionButton = $('notificationPermissionButton');
+  const desktop = !document.documentElement.classList.contains('web-runtime');
+  if (desktop) {
+    permissionButton.textContent = 'Desktop alerts on';
+    permissionButton.disabled = true;
+  } else if (!('Notification' in window)) {
+    permissionButton.textContent = 'Unavailable';
+    permissionButton.disabled = true;
+  } else {
+    permissionButton.disabled = Notification.permission === 'denied';
+    permissionButton.textContent = Notification.permission === 'granted' ? 'Browser alerts on' : Notification.permission === 'denied' ? 'Blocked in browser' : 'Enable alerts';
+  }
+}
+
+function formatClockTime(timestamp) {
+  return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(timestamp));
+}
+
+async function saveTimeTarget(message = null) {
+  const settings = await window.tasknest.saveSettings({ timeTarget });
+  timeTarget = settings.timeTarget || null;
+  if (message) showToast(message);
+  renderTimeTarget();
+}
+
+function renderTimeTarget() {
+  const active = Boolean(timeTarget);
+  $('timeTargetSetup').classList.toggle('hidden', active);
+  $('timeTargetLive').classList.toggle('hidden', !active);
+  $('clearTimeTarget').classList.toggle('hidden', !active);
+  if (!active) {
+    $('timeTargetTitle').textContent = 'Set a focused window';
+    return;
+  }
+  const now = Date.now();
+  const remainingSeconds = Math.max(0, Math.ceil((timeTarget.endsAt - now) / 1000));
+  const elapsedSeconds = Math.max(0, timeTarget.durationSeconds - remainingSeconds);
+  const progress = Math.min(100, Math.round(elapsedSeconds / Math.max(1, timeTarget.durationSeconds) * 100));
+  $('timeTargetTitle').textContent = timeTarget.label || 'Focused window';
+  $('timeTargetRemaining').textContent = remainingSeconds ? formatClock(remainingSeconds) : 'Complete';
+  $('timeTargetEnds').textContent = remainingSeconds ? `Ends at ${formatClockTime(timeTarget.endsAt)}` : `Finished at ${formatClockTime(timeTarget.endsAt)}`;
+  $('timeTargetBar').style.width = `${progress}%`;
+  if (!remainingSeconds && !timeTarget.notifiedAt) {
+    timeTarget.notifiedAt = now;
+    saveTimeTarget('Time target complete');
+    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('Time target complete', { body: `${timeTarget.label || 'Focused window'} is finished.`, icon: 'assets/tasknest-icon.svg' });
+  }
+}
+
+function startTimeTarget(endsAt, label) {
+  const now = Date.now();
+  if (!Number.isFinite(endsAt) || endsAt <= now) return showToast('Choose a time later than now');
+  timeTarget = { id: uid('time-target'), label, startedAt: now, endsAt, durationSeconds: Math.max(60, Math.round((endsAt - now) / 1000)), notifiedAt: null };
+  saveTimeTarget(`${label} started`);
+}
+
+async function showBrowserNotification(task, reminder, at) {
+  if (!document.documentElement.classList.contains('web-runtime') || !('Notification' in window) || Notification.permission !== 'granted' || !document.hidden) return;
+  const options = { body: task.description || `${task.dueTime ? `Due ${task.dueTime}` : 'TaskNest reminder'}`, tag: `tasknest-${task.id}-${reminder.id}-${at}`, data: { taskId: task.id }, icon: 'assets/tasknest-icon.svg' };
+  if ('serviceWorker' in navigator) {
+    const registration = await navigator.serviceWorker.ready.catch(() => null);
+    if (registration) return registration.showNotification(task.title, options);
+  }
+  new Notification(task.title, options);
+}
+
+function presentReminder(task, reminder, at) {
+  if (!task || !reminder || task.done || task.archived || reminder.dismissedAt) return;
+  const key = `${task.id}:${reminder.id}:${at}`;
+  if (shownReminderKeys.has(key) || reminder.lastTriggeredAt === at) return;
+  shownReminderKeys.add(key);
+  reminder.lastTriggeredAt = at;
+  activeReminder = { taskId: task.id, reminderId: reminder.id };
+  $('reminderAlertTitle').textContent = task.title;
+  $('reminderAlertMeta').textContent = task.dueTime ? `Due ${taskDateLabel(task)} at ${task.dueTime}` : task.date ? `Scheduled for ${taskDateLabel(task)}` : 'Open TaskNest to review it.';
+  $('reminderAlert').classList.add('show');
+  touch(task);
+  persist();
+  renderReminderCard();
+  showBrowserNotification(task, reminder, at);
+}
+
+function checkClientReminders() {
+  const now = Date.now();
+  for (const task of activeTasks().filter((item) => !item.done)) {
+    for (const reminder of task.reminders) {
+      const at = effectiveReminderAt(task, reminder);
+      if (!reminder.dismissedAt && at && at <= now && at > now - 86400000) presentReminder(task, reminder, at);
+    }
+  }
+}
+
+function closeReminderAlert() {
+  $('reminderAlert').classList.remove('show');
+  activeReminder = null;
+}
+
 function renderWeeklyTargets() {
   const activeTargets = weeklyTargets.filter((target) => !target.archived);
   const totalGoal = activeTargets.reduce((sum, target) => sum + target.target, 0);
@@ -953,6 +1223,8 @@ function render() {
   renderProjects();
   if (special) renderSpecialUtility();
   renderWidgetCard();
+  renderTimeTarget();
+  renderReminderCard();
   renderBulkBar();
   $('taskListHeading').textContent = activeView === 'today' ? 'All today’s tasks' : activeView === 'overdue' ? 'Missed tasks' : 'Tasks';
 }
@@ -981,6 +1253,48 @@ function toDatetimeLocal(timestamp) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
+function editorTaskDraft() {
+  return {
+    date: $('editDate').value || null,
+    dueTime: $('editTime').value || null,
+    reminders: editingReminders
+  };
+}
+
+function editorRecurrenceRule() {
+  const recurrence = $('editRecurrence').value;
+  const existing = tasks.find((task) => task.id === editingTaskId)?.recurrenceRule || {};
+  const date = $('editDate').value || null;
+  const frequency = recurrence === 'custom' ? $('editRecurrenceUnit').value : recurrence === 'weekly' || recurrence === 'weekdays' ? 'week' : recurrence === 'monthly' ? 'month' : 'day';
+  return {
+    frequency,
+    interval: recurrence === 'custom' ? Math.max(1, Math.min(99, Number($('editRecurrenceInterval').value) || 1)) : 1,
+    weekdays: recurrence === 'weekdays' || (recurrence === 'custom' && frequency === 'week') ? [...editingWeekdays].sort() : [],
+    anchorDay: date ? parseDate(date).getDate() : existing.anchorDay || null,
+    anchorDate: validDateKey(existing.anchorDate) && editingTaskId ? existing.anchorDate : date
+  };
+}
+
+function renderScheduleEditor() {
+  const recurrence = $('editRecurrence').value;
+  const custom = recurrence === 'custom';
+  const showWeekdays = recurrence === 'weekdays' || (custom && $('editRecurrenceUnit').value === 'week');
+  $('recurrenceIntervalField').classList.toggle('hidden', !custom);
+  $('weekdayPicker').classList.toggle('hidden', !showWeekdays);
+  if (showWeekdays && !editingWeekdays.length) editingWeekdays = recurrence === 'weekdays' ? [1, 2, 3, 4, 5] : [$('editDate').value ? parseDate($('editDate').value).getDay() : new Date().getDay()];
+  document.querySelectorAll('[data-weekday]').forEach((button) => button.classList.toggle('selected', editingWeekdays.includes(Number(button.dataset.weekday))));
+  $('recurrenceSummary').textContent = recurrence === 'none' ? 'One-time task' : recurrenceLabel(recurrence, editorRecurrenceRule());
+}
+
+function renderReminderEditor() {
+  const draft = editorTaskDraft();
+  $('reminderSummary').textContent = editingReminders.length ? `${editingReminders.length} active` : 'No reminders';
+  $('reminderHelp').textContent = draft.date && draft.dueTime ? 'Deadline reminders follow the task when it repeats or is rescheduled.' : 'Set a due date and time to use deadline reminders.';
+  $('reminderEditList').innerHTML = editingReminders.length ? editingReminders
+    .sort((a, b) => (effectiveReminderAt(draft, a) || Infinity) - (effectiveReminderAt(draft, b) || Infinity))
+    .map((reminder) => `<div class="reminder-edit-row" data-reminder-id="${escapeHtml(reminder.id)}"><span><strong>${escapeHtml(formatReminderLabel(draft, reminder))}</strong><small>${reminder.kind === 'before' ? 'Moves with deadline' : 'Exact date and time'}</small></span><button data-reminder-action="remove" type="button" aria-label="Remove reminder">×</button></div>`).join('') : '<p class="reminder-empty">Add one or more alerts so this task does not slip.</p>';
+}
+
 function renderSubtaskEditor() {
   const done = editingSubtasks.filter((item) => item.done).length;
   $('subtaskProgress').textContent = `${done} of ${editingSubtasks.length}`;
@@ -990,6 +1304,9 @@ function renderSubtaskEditor() {
 function openEditor(task = null) {
   editingTaskId = task?.id || null;
   editingSubtasks = (task?.subtasks || []).map((subtask) => ({ ...subtask }));
+  editingReminders = normalizeClientReminders(task || {}).map((reminder) => ({ ...reminder }));
+  const rule = normalizedRecurrenceRule(task || { recurrence: 'none' }, task?.date || selectedDate);
+  editingWeekdays = [...rule.weekdays];
   $('editEyebrow').textContent = task ? 'TASK DETAILS' : 'NEW TASK';
   $('editHeading').textContent = task ? 'Edit task' : 'Create a complete task';
   $('editTitle').value = task?.title || '';
@@ -1001,9 +1318,15 @@ function openEditor(task = null) {
   $('editTime').value = task?.dueTime || '';
   $('editEstimate').value = task?.estimatedMinutes || '';
   $('editRecurrence').value = task?.recurrence || 'none';
-  $('editReminder').value = toDatetimeLocal(task?.reminderAt);
+  $('editRecurrenceInterval').value = rule.interval;
+  $('editRecurrenceUnit').value = rule.frequency;
+  $('reminderPreset').value = '15';
+  $('customReminderAt').value = '';
+  $('customReminderAt').classList.add('hidden');
   $('timestampRow').innerHTML = task ? `<span>Created ${formatTimestamp(task.createdAt)}</span>${task.completedAt ? `<span>Completed ${formatTimestamp(task.completedAt)}</span>` : '<span>Not completed</span>'}` : '<span>Created when you save</span>';
   renderSubtaskEditor();
+  renderScheduleEditor();
+  renderReminderEditor();
   editDialog.showModal();
   setTimeout(() => $('editTitle').focus(), 40);
 }
@@ -1011,7 +1334,8 @@ function openEditor(task = null) {
 function duplicateTask(task) {
   const duplicate = newTask(`${task.title} copy`, {
     ...task, id: uid(), title: `${task.title} copy`, status: 'open', done: false, archived: false, deletedAt: null,
-    completedAt: null, createdAt: Date.now(), updatedAt: Date.now(), order: nextTaskOrder(), seriesId: null, reminderAt: null,
+    completedAt: null, createdAt: Date.now(), updatedAt: Date.now(), order: nextTaskOrder(), seriesId: null, occurrenceKey: null, reminderAt: null,
+    reminders: task.reminders.map((reminder) => ({ ...reminder, id: uid('reminder'), snoozedUntil: null, dismissedAt: null, lastTriggeredAt: null })),
     actualSeconds: 0, focusNotes: '', focusSessions: [], activeSession: null,
     subtasks: task.subtasks.map((subtask) => ({ ...subtask, id: uid('subtask'), done: false, completedAt: null, createdAt: Date.now() }))
   });
@@ -1043,6 +1367,44 @@ voiceLanguage.addEventListener('change', () => {
   setVoiceStatus(`Ready for ${voiceLanguageName()}`, 'idle');
 });
 $('newTaskButton').addEventListener('click', () => openEditor());
+$('editRecurrence').addEventListener('change', renderScheduleEditor);
+$('editRecurrenceInterval').addEventListener('input', renderScheduleEditor);
+$('editRecurrenceUnit').addEventListener('change', renderScheduleEditor);
+$('editDate').addEventListener('change', () => { renderScheduleEditor(); renderReminderEditor(); });
+$('editTime').addEventListener('change', renderReminderEditor);
+$('weekdayPicker').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-weekday]');
+  if (!button) return;
+  const day = Number(button.dataset.weekday);
+  editingWeekdays = editingWeekdays.includes(day) ? editingWeekdays.filter((value) => value !== day) : [...editingWeekdays, day];
+  renderScheduleEditor();
+});
+$('reminderPreset').addEventListener('change', () => $('customReminderAt').classList.toggle('hidden', $('reminderPreset').value !== 'custom'));
+$('addReminderButton').addEventListener('click', () => {
+  if (editingReminders.length >= 10) return showToast('A task can have up to 10 reminders');
+  const preset = $('reminderPreset').value;
+  let reminder;
+  if (preset === 'custom') {
+    const at = new Date($('customReminderAt').value).getTime();
+    if (!at) return showToast('Choose an exact reminder date and time');
+    reminder = { id: uid('reminder'), kind: 'exact', at, minutesBefore: null, snoozedUntil: null, dismissedAt: null, lastTriggeredAt: null };
+  } else {
+    if (!$('editDate').value || !$('editTime').value) return showToast('Set a due date and time first');
+    reminder = { id: uid('reminder'), kind: 'before', minutesBefore: Number(preset), at: null, snoozedUntil: null, dismissedAt: null, lastTriggeredAt: null };
+  }
+  const duplicate = editingReminders.some((item) => item.kind === reminder.kind && (item.kind === 'before' ? item.minutesBefore === reminder.minutesBefore : item.at === reminder.at));
+  if (duplicate) return showToast('That reminder is already added');
+  editingReminders.push(reminder);
+  $('customReminderAt').value = '';
+  renderReminderEditor();
+});
+$('reminderEditList').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-reminder-action="remove"]');
+  if (!button) return;
+  const row = button.closest('[data-reminder-id]');
+  editingReminders = editingReminders.filter((reminder) => reminder.id !== row.dataset.reminderId);
+  renderReminderEditor();
+});
 
 taskList.addEventListener('click', (event) => {
   const actionButton = event.target.closest('[data-action]');
@@ -1054,7 +1416,7 @@ taskList.addEventListener('click', (event) => {
     const next = setTaskCompletion(task, !task.done);
     const target = weeklyTargets.find((entry) => entry.id === task.weeklyTargetId && !entry.archived);
     const targetReached = target && task.done && weeklyTargetProgress(target) >= target.target;
-    persist(next ? `Completed · next ${recurrenceLabel(task.recurrence).toLowerCase()} task created` : targetReached ? `${target.title}: weekly target reached` : task.done ? 'Nicely done' : 'Task reopened');
+    persist(next ? `Completed · next ${recurrenceLabel(task.recurrence, task.recurrenceRule).toLowerCase()} task created` : targetReached ? `${target.title}: weekly target reached` : task.done ? 'Nicely done' : 'Task reopened');
     render();
   } else if (actionButton.dataset.action === 'edit') openEditor(task);
   else if (actionButton.dataset.action === 'focus') startFocus(task);
@@ -1134,13 +1496,15 @@ recoveryDialog.addEventListener('click', (event) => {
   const action = button.dataset.recoveryAction;
   if (action === 'tomorrow') {
     const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-    task.date = localDateKey(tomorrow); task.reminderAt = null;
+    const conflict = rescheduleTask(task, localDateKey(tomorrow));
+    if (conflict) return showToast(`Cannot move · ${conflict.title} is at ${conflict.dueTime}`);
     return completeRecovery(task, 'Moved to tomorrow');
   }
   if (action === 'date') {
     const date = $('recoveryDate').value;
     if (!validDateKey(date)) return showToast('Choose a valid date');
-    task.date = date; task.reminderAt = null;
+    const conflict = rescheduleTask(task, date);
+    if (conflict) return showToast(`Cannot move · ${conflict.title} is at ${conflict.dueTime}`);
     return completeRecovery(task, `Moved to ${formatDay(date, { month: 'short', day: 'numeric' })}`);
   }
   if (action === 'priority') {
@@ -1148,7 +1512,7 @@ recoveryDialog.addEventListener('click', (event) => {
     return completeRecovery(task, 'Priority updated');
   }
   if (action === 'backlog') {
-    task.date = null; task.dueTime = null; task.reminderAt = null;
+    task.date = null; task.dueTime = null; task.reminders = []; task.reminderAt = null;
     return completeRecovery(task, 'Moved to Inbox backlog');
   }
   if (action === 'subtasks') {
@@ -1202,8 +1566,10 @@ bulkBar.addEventListener('click', (event) => {
   if (action === 'move') {
     const date = $('bulkDate').value;
     if (!validDateKey(date)) return showToast('Choose a valid date first');
-    for (const task of tasks.filter((item) => selectedTaskIds.has(item.id))) { task.date = date; touch(task); }
-    persist(`${selectedTaskIds.size} tasks moved`); selectedTaskIds.clear(); render();
+    let moved = 0;
+    let conflicts = 0;
+    for (const task of tasks.filter((item) => selectedTaskIds.has(item.id))) rescheduleTask(task, date) ? conflicts += 1 : moved += 1;
+    persist(`${moved} moved${conflicts ? ` · ${conflicts} need a 2-hour gap` : ''}`); selectedTaskIds.clear(); render();
   }
 });
 
@@ -1212,7 +1578,13 @@ editForm.addEventListener('submit', (event) => {
   if (event.submitter?.value === 'cancel') return editDialog.close();
   const title = $('editTitle').value.trim();
   const date = $('editDate').value || null;
+  const dueTime = date && $('editTime').value ? $('editTime').value : null;
   if (!title || (date && !validDateKey(date))) return;
+  const conflict = timedTaskConflict(date, dueTime, editingTaskId);
+  if (conflict) return showToast(`Keep 2 hours free · ${conflict.title} is at ${conflict.dueTime}`);
+  if (editingReminders.some((reminder) => reminder.kind === 'before') && (!date || !$('editTime').value)) return showToast('Set a due date and time for deadline reminders');
+  const needsWeekdays = $('editRecurrence').value === 'weekdays' || ($('editRecurrence').value === 'custom' && $('editRecurrenceUnit').value === 'week');
+  if (date && needsWeekdays && !editingWeekdays.length) return showToast('Choose at least one weekday');
   let task = tasks.find((item) => item.id === editingTaskId);
   if (!task) { task = newTask(title); tasks.push(task); }
   const wasDone = task.done;
@@ -1220,11 +1592,15 @@ editForm.addEventListener('submit', (event) => {
   task.description = $('editDescription').value.trim();
   task.priority = $('editPriority').value;
   task.projectId = $('editProject').value || null;
+  const previousDate = task.date;
+  if (previousDate && date && previousDate !== date) editingReminders = editingReminders.map((reminder) => ({ ...reminder, at: reminder.kind === 'exact' ? shiftExactReminder(reminder.at, previousDate, date) : null, snoozedUntil: null, dismissedAt: null, lastTriggeredAt: null }));
   task.date = date;
-  task.dueTime = date && $('editTime').value ? $('editTime').value : null;
+  task.dueTime = dueTime;
   task.estimatedMinutes = Number($('editEstimate').value) || null;
   task.recurrence = date ? $('editRecurrence').value : 'none';
-  task.reminderAt = $('editReminder').value ? new Date($('editReminder').value).getTime() : null;
+  task.recurrenceRule = normalizedRecurrenceRule({ recurrence: task.recurrence, recurrenceRule: editorRecurrenceRule(), date }, date);
+  task.reminders = editingReminders.map((reminder) => ({ ...reminder }));
+  task.reminderAt = null;
   task.subtasks = editingSubtasks;
   const shouldBeDone = $('editStatus').value === 'completed';
   if (wasDone !== shouldBeDone) setTaskCompletion(task, shouldBeDone); else touch(task);
@@ -1232,7 +1608,7 @@ editForm.addEventListener('submit', (event) => {
   persist(date ? 'Task saved' : 'Task saved to Inbox');
   render();
 });
-editDialog.addEventListener('close', () => { editingTaskId = null; editingSubtasks = []; });
+editDialog.addEventListener('close', () => { editingTaskId = null; editingSubtasks = []; editingReminders = []; editingWeekdays = []; });
 
 $('subtaskAdd').addEventListener('click', () => {
   const title = $('subtaskInput').value.trim();
@@ -1322,6 +1698,57 @@ async function toggleWidget() {
 }
 $('desktopWidgetButton').addEventListener('click', toggleWidget);
 $('titleWidgetButton').addEventListener('click', async () => { if (!widgetEnabled) await toggleWidget(); else { await window.tasknest.openWidget(); showToast('Widget brought to front'); } });
+$('timeTargetSetup').addEventListener('click', (event) => {
+  const preset = event.target.closest('[data-target-hours]');
+  if (!preset) return;
+  const hours = Number(preset.dataset.targetHours);
+  startTimeTarget(Date.now() + hours * 3600000, `${hours}-hour target`);
+});
+$('startUntilTarget').addEventListener('click', () => {
+  const value = $('timeTargetUntil').value;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return showToast('Choose a valid finish time');
+  const [hour, minute] = value.split(':').map(Number);
+  const end = new Date();
+  end.setHours(hour, minute, 0, 0);
+  startTimeTarget(end.getTime(), `Until ${formatClockTime(end.getTime())}`);
+});
+$('clearTimeTarget').addEventListener('click', () => { timeTarget = null; saveTimeTarget('Time target cleared'); });
+$('notificationPermissionButton').addEventListener('click', async () => {
+  if (!('Notification' in window)) return showToast('Browser notifications are unavailable here');
+  const permission = await Notification.requestPermission();
+  renderReminderCard();
+  showToast(permission === 'granted' ? 'Browser alerts enabled' : 'Notifications were not enabled');
+});
+$('reminderPreviewList').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-reminder-task]');
+  const task = tasks.find((item) => item.id === button?.dataset.reminderTask);
+  if (task) openEditor(task);
+});
+$('reminderAlertClose').addEventListener('click', () => {
+  const task = tasks.find((item) => item.id === activeReminder?.taskId);
+  const reminder = task?.reminders.find((item) => item.id === activeReminder?.reminderId);
+  if (task && reminder) { reminder.dismissedAt = Date.now(); touch(task); persist('Reminder dismissed'); renderReminderCard(); }
+  closeReminderAlert();
+});
+$('reminderSnoozeButton').addEventListener('click', () => {
+  const task = tasks.find((item) => item.id === activeReminder?.taskId);
+  const reminder = task?.reminders.find((item) => item.id === activeReminder?.reminderId);
+  if (!task || !reminder) return closeReminderAlert();
+  reminder.snoozedUntil = Date.now() + 10 * 60000;
+  reminder.dismissedAt = null;
+  touch(task);
+  persist('Snoozed for 10 minutes');
+  closeReminderAlert();
+  renderReminderCard();
+});
+$('reminderDoneButton').addEventListener('click', () => {
+  const task = tasks.find((item) => item.id === activeReminder?.taskId);
+  if (!task) return closeReminderAlert();
+  const next = setTaskCompletion(task, true);
+  persist(next ? 'Completed · next occurrence created' : 'Task completed');
+  closeReminderAlert();
+  render();
+});
 
 toastUndo.addEventListener('click', () => { if (!undoAction) return; const action = undoAction; undoAction = null; clearTimeout(toastTimer); toast.classList.remove('show'); action(); });
 
@@ -1335,6 +1762,11 @@ document.addEventListener('keydown', (event) => {
 window.tasknest.onTasksChanged(async () => { tasks = prepareTasks(await window.tasknest.loadTasks()); render(); });
 window.tasknest.onWeeklyTargetsChanged(async () => { weeklyTargets = await window.tasknest.loadWeeklyTargets(); render(); });
 window.tasknest.onProjectsChanged(async () => { projects = await window.tasknest.loadProjects(); render(); });
+window.tasknest.onReminderDue((payload) => {
+  const task = tasks.find((item) => item.id === payload?.taskId);
+  const reminder = task?.reminders.find((item) => item.id === payload?.reminderId);
+  if (task && reminder) presentReminder(task, reminder, payload.dueAt || effectiveReminderAt(task, reminder));
+});
 window.tasknest.onWidgetSettings((settings) => { widgetEnabled = settings.widgetEnabled; renderWidgetCard(); });
 
 async function init() {
@@ -1348,8 +1780,15 @@ async function init() {
   weeklyTargets = savedTargets;
   projects = savedProjects;
   widgetEnabled = settings.widgetEnabled;
+  timeTarget = settings.timeTarget || null;
   $('bulkDate').value = selectedDate;
   render();
+  if (document.documentElement.classList.contains('web-runtime') && 'serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  clearInterval(reminderCheckTimer);
+  reminderCheckTimer = setInterval(checkClientReminders, 15000);
+  clearInterval(timeTargetTimer);
+  timeTargetTimer = setInterval(renderTimeTarget, 1000);
+  checkClientReminders();
   setTimeout(() => taskInput.focus(), 200);
 }
 

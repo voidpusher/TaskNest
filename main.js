@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, Notification, session } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Notification, session, Tray, Menu, nativeImage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -6,6 +6,8 @@ const { spawn } = require('child_process');
 let mainWindow;
 let widgetWindow;
 let voiceRecognitionProcess;
+let tray;
+let isQuitting = false;
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
@@ -54,6 +56,47 @@ function localDateKey() {
   return `${year}-${month}-${day}`;
 }
 
+function normalizeRecurrence(task) {
+  const recurrence = ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'custom'].includes(task.recurrence) ? task.recurrence : 'none';
+  const raw = task.recurrenceRule && typeof task.recurrenceRule === 'object' ? task.recurrenceRule : {};
+  const fallbackFrequency = recurrence === 'custom' ? 'day' : recurrence === 'weekly' || recurrence === 'weekdays' ? 'week' : recurrence === 'monthly' ? 'month' : 'day';
+  const weekdays = [...new Set((Array.isArray(raw.weekdays) ? raw.weekdays : recurrence === 'weekdays' ? [1, 2, 3, 4, 5] : []).map(Number).filter((day) => day >= 0 && day <= 6))].sort();
+  return {
+    recurrence,
+    recurrenceRule: {
+      frequency: ['day', 'week', 'month'].includes(raw.frequency) ? raw.frequency : fallbackFrequency,
+      interval: Math.max(1, Math.min(99, Math.round(Number(raw.interval) || 1))),
+      weekdays,
+      anchorDay: Math.max(1, Math.min(31, Math.round(Number(raw.anchorDay) || 0))) || null,
+      anchorDate: /^\d{4}-\d{2}-\d{2}$/.test(raw.anchorDate || '') ? raw.anchorDate : null
+    }
+  };
+}
+
+function normalizeReminders(task, createdAt) {
+  const source = Array.isArray(task.reminders) ? task.reminders : task.reminderAt ? [{ id: `legacy-${task.reminderAt}`, kind: 'exact', at: task.reminderAt }] : [];
+  const seen = new Set();
+  return source.slice(0, 10).map((reminder) => {
+    if (!reminder || typeof reminder !== 'object') return null;
+    const kind = reminder.kind === 'before' ? 'before' : 'exact';
+    const minutesBefore = kind === 'before' ? Math.max(0, Math.min(525600, Math.round(Number(reminder.minutesBefore) || 0))) : null;
+    const at = kind === 'exact' && Number(reminder.at) > 0 ? Number(reminder.at) : null;
+    if (kind === 'exact' && !at) return null;
+    const id = String(reminder.id || `${createdAt}-${kind}-${minutesBefore ?? at}`).slice(0, 120);
+    if (seen.has(id)) return null;
+    seen.add(id);
+    return {
+      id,
+      kind,
+      minutesBefore,
+      at,
+      snoozedUntil: Number(reminder.snoozedUntil) > 0 ? Number(reminder.snoozedUntil) : null,
+      dismissedAt: Number(reminder.dismissedAt) > 0 ? Number(reminder.dismissedAt) : null,
+      lastTriggeredAt: Number(reminder.lastTriggeredAt) > 0 ? Number(reminder.lastTriggeredAt) : null
+    };
+  }).filter(Boolean);
+}
+
 function normalizeTask(task) {
   if (!task || typeof task !== 'object') return null;
   const title = String(task.title || '').trim().slice(0, 160);
@@ -93,6 +136,8 @@ function normalizeTask(task) {
     lastResumedAt: Number.isFinite(Number(rawActiveSession.lastResumedAt)) ? Number(rawActiveSession.lastResumedAt) : null,
     running: Boolean(rawActiveSession.running)
   } : null;
+  const { recurrence, recurrenceRule } = normalizeRecurrence(task);
+  const reminders = normalizeReminders(task, createdAt);
   return {
     id: String(task.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
     title,
@@ -107,12 +152,15 @@ function normalizeTask(task) {
     estimatedMinutes: Number(task.estimatedMinutes) > 0 ? Math.min(1440, Math.round(Number(task.estimatedMinutes))) : null,
     projectId: task.projectId ? String(task.projectId).slice(0, 120) : null,
     subtasks,
-    recurrence: ['none', 'daily', 'weekdays', 'weekly', 'monthly'].includes(task.recurrence) ? task.recurrence : 'none',
-    reminderAt: Number(task.reminderAt) > 0 ? Number(task.reminderAt) : null,
+    recurrence,
+    recurrenceRule,
+    reminders,
+    reminderAt: null,
     createdAt,
     completedAt,
     updatedAt: Number.isFinite(Number(task.updatedAt)) ? Number(task.updatedAt) : (completedAt || createdAt),
     order: Number.isFinite(Number(task.order)) ? Number(task.order) : createdAt,
+    occurrenceKey: task.occurrenceKey ? String(task.occurrenceKey).slice(0, 260) : null,
     seriesId: task.seriesId ? String(task.seriesId).slice(0, 120) : null,
     weeklyTargetId: task.weeklyTargetId ? String(task.weeklyTargetId).slice(0, 120) : null,
     actualSeconds: Math.max(0, Math.min(31536000, Math.round(Number(task.actualSeconds) || 0))),
@@ -206,7 +254,42 @@ function writeTasks(tasks) {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send('tasks:changed');
   }
+  updateLoginBehavior(safeTasks);
   return true;
+}
+
+function updateLoginBehavior(currentTasks = null) {
+  if (!app.isReady()) return;
+  const reminderTasks = (currentTasks || readTasks()).some((task) => !task.archived && !task.done && task.reminders.length);
+  const settings = readSettings();
+  const shouldStart = settings.widgetEnabled || reminderTasks || (settings.timeTarget && settings.timeTarget.endsAt > Date.now());
+  app.setLoginItemSettings({ openAtLogin: shouldStart, args: shouldStart ? ['--background'] : [] });
+}
+
+function taskDeadline(task) {
+  if (!task.date) return null;
+  const [year, month, day] = task.date.split('-').map(Number);
+  const [hour, minute] = (task.dueTime || '09:00').split(':').map(Number);
+  return new Date(year, month - 1, day, hour, minute, 0, 0).getTime();
+}
+
+function reminderTimestamp(task, reminder) {
+  if (reminder.snoozedUntil) return reminder.snoozedUntil;
+  if (reminder.kind === 'exact') return reminder.at;
+  const deadline = taskDeadline(task);
+  return deadline ? deadline - reminder.minutesBefore * 60000 : null;
+}
+
+function sendReminderToWindows(task, reminder, dueAt) {
+  const payload = { taskId: task.id, reminderId: reminder.id, title: task.title, dueAt };
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('reminder:due', payload);
+  if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send('reminder:due', payload);
+}
+
+function openReminder(task, reminder, dueAt) {
+  const window = createMainWindow();
+  const send = () => window.webContents.send('reminder:due', { taskId: task.id, reminderId: reminder.id, title: task.title, dueAt });
+  if (window.webContents.isLoading()) window.webContents.once('did-finish-load', send); else send();
 }
 
 function checkReminders() {
@@ -215,16 +298,49 @@ function checkReminders() {
   const notified = new Set(readJson(reminderLogFile(), []));
   let changed = false;
   for (const task of readTasks()) {
-    const reminderKey = `${task.id}:${task.reminderAt}`;
-    if (!task.archived && !task.done && task.reminderAt && task.reminderAt <= now && task.reminderAt > now - 86400000 && !notified.has(reminderKey)) {
-      const notification = new Notification({ title: task.title, body: task.description || 'TaskNest reminder' });
+    if (task.archived || task.done) continue;
+    for (const reminder of task.reminders) {
+      const dueAt = reminderTimestamp(task, reminder);
+      const reminderKey = `${task.id}:${reminder.id}:${dueAt}`;
+      if (!reminder.dismissedAt && dueAt && dueAt <= now && dueAt > now - 86400000 && !notified.has(reminderKey)) {
+        const dueCopy = task.dueTime ? `Due ${task.dueTime}` : task.date ? `Scheduled ${task.date}` : 'Open TaskNest to review';
+        const notification = new Notification({ title: task.title, body: task.description || dueCopy });
+        notification.on('click', () => openReminder(task, reminder, dueAt));
+        notification.show();
+        sendReminderToWindows(task, reminder, dueAt);
+        notified.add(reminderKey);
+        changed = true;
+      }
+    }
+  }
+  const target = readSettings().timeTarget;
+  if (target && target.endsAt <= now && target.endsAt > now - 86400000) {
+    const targetKey = `time-target:${target.id}:${target.endsAt}`;
+    if (!notified.has(targetKey)) {
+      const notification = new Notification({ title: 'Time target complete', body: `${target.label || 'Focused window'} is finished.` });
       notification.on('click', () => createMainWindow());
       notification.show();
-      notified.add(reminderKey);
+      notified.add(targetKey);
       changed = true;
     }
   }
   if (changed) writeJson(reminderLogFile(), [...notified].slice(-1000));
+}
+
+function createTray() {
+  if (tray) return tray;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" rx="9" fill="#0a84ff"/><path d="M8 16l5 5L24 10" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const image = nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`).resize({ width: 16, height: 16 });
+  tray = new Tray(image);
+  tray.setToolTip('TaskNest — reminders are active');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Open TaskNest', click: () => createMainWindow() },
+    { label: 'Check reminders now', click: () => checkReminders() },
+    { type: 'separator' },
+    { label: 'Quit TaskNest', click: () => { isQuitting = true; app.quit(); } }
+  ]));
+  tray.on('double-click', () => createMainWindow());
+  return tray;
 }
 
 function recognizeVoice(language) {
@@ -273,7 +389,16 @@ function recognizeVoice(language) {
 }
 
 function readSettings() {
-  return { widgetEnabled: false, widgetPinned: true, widgetBounds: null, ...readJson(settingsFile(), {}) };
+  const raw = { widgetEnabled: false, widgetPinned: true, widgetBounds: null, timeTarget: null, ...readJson(settingsFile(), {}) };
+  const target = raw.timeTarget && typeof raw.timeTarget === 'object' && Number(raw.timeTarget.endsAt) > 0 ? {
+    id: String(raw.timeTarget.id || `target-${Date.now()}`).slice(0, 120),
+    label: String(raw.timeTarget.label || 'Focused window').slice(0, 80),
+    startedAt: Number(raw.timeTarget.startedAt) || Date.now(),
+    endsAt: Number(raw.timeTarget.endsAt),
+    durationSeconds: Math.max(60, Math.round(Number(raw.timeTarget.durationSeconds) || (Number(raw.timeTarget.endsAt) - Number(raw.timeTarget.startedAt)) / 1000)),
+    notifiedAt: Number(raw.timeTarget.notifiedAt) || null
+  } : null;
+  return { ...raw, timeTarget: target };
 }
 
 function saveSettings(update) {
@@ -369,8 +494,10 @@ app.whenReady().then(() => {
     const audioOnly = mediaTypes.length === 0 || mediaTypes.every((type) => type === 'audio');
     callback(isLocalTaskNest(webContents) && permission === 'media' && audioOnly);
   });
-  createMainWindow();
+  if (!process.argv.includes('--background')) createMainWindow();
+  createTray();
   if (readSettings().widgetEnabled) createWidgetWindow();
+  updateLoginBehavior();
   checkReminders();
   setInterval(checkReminders, 30000);
   app.on('activate', () => createMainWindow());
@@ -387,12 +514,24 @@ app.on('second-instance', () => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform === 'darwin' && isQuitting) app.quit();
 });
 
+app.on('before-quit', () => { isQuitting = true; });
+
 ipcMain.handle('tasks:load', () => readTasks());
-ipcMain.handle('tasks:save', (_event, tasks) => writeTasks(tasks));
+ipcMain.handle('tasks:save', (_event, tasks) => {
+  const saved = writeTasks(tasks);
+  setImmediate(checkReminders);
+  return saved;
+});
 ipcMain.handle('settings:load', () => readSettings());
+ipcMain.handle('settings:save', (_event, update) => {
+  const settings = saveSettings(update && typeof update === 'object' ? update : {});
+  updateLoginBehavior();
+  setImmediate(checkReminders);
+  return settings;
+});
 ipcMain.handle('targets:load', () => readTargets());
 ipcMain.handle('targets:save', (_event, targets) => writeTargets(targets));
 ipcMain.handle('projects:load', () => readProjects());
@@ -407,14 +546,14 @@ ipcMain.handle('voice:cancel', () => {
 
 ipcMain.handle('widget:open', () => {
   saveSettings({ widgetEnabled: true });
-  app.setLoginItemSettings({ openAtLogin: true });
+  updateLoginBehavior();
   createWidgetWindow();
   return readSettings();
 });
 
 ipcMain.handle('widget:remove', () => {
   saveSettings({ widgetEnabled: false });
-  app.setLoginItemSettings({ openAtLogin: false });
+  updateLoginBehavior();
   if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.close();
   return readSettings();
 });

@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:;">
   <title>TaskNest</title>
-  <link rel="stylesheet" href="styles.css?v=2.0.0">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css?v=2.1.0">
 </head>
 <body>
   <header class="titlebar">
@@ -77,6 +78,15 @@
     <aside class="utility-column">
       <section class="utility-card calendar-card panel-surface"><header class="card-heading"><strong id="calendarMonth">September 2026</strong><div class="calendar-actions"><button id="previousDay" type="button" aria-label="Previous month"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button><button id="nextDay" type="button" aria-label="Next month"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button></div></header><div class="calendar-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div><div class="calendar-grid" id="calendarGrid"></div><div class="calendar-footer"><label class="date-picker-wrap"><input type="date" id="datePicker" aria-label="Choose task date"></label><button class="today-button hidden" id="todayButton" type="button">Today</button></div></section>
       <section class="utility-card focus-card panel-surface"><div class="focus-topline"><span>Current view</span><strong id="progressValue">0%</strong></div><div class="focus-meter"><span id="focusBar"></span></div><p id="focusMessage">Start with one small task.</p></section>
+      <section class="utility-card time-target-card panel-surface" aria-label="Short period target">
+        <header class="time-target-heading"><div><span>TIME TARGET</span><strong id="timeTargetTitle">Set a focused window</strong></div><button class="hidden" id="clearTimeTarget" type="button">Clear</button></header>
+        <div class="time-target-live hidden" id="timeTargetLive"><strong id="timeTargetRemaining">03:00:00</strong><span id="timeTargetEnds">Ends at 2:00 PM</span><div class="time-target-meter"><span id="timeTargetBar"></span></div></div>
+        <div class="time-target-setup" id="timeTargetSetup"><div class="time-preset-row"><button data-target-hours="3" type="button">3 hours</button><button data-target-hours="5" type="button">5 hours</button><button data-target-hours="8" type="button">8 hours</button></div><label><span>Or finish by</span><input id="timeTargetUntil" type="time" value="14:00"><button id="startUntilTarget" type="button">Start</button></label></div>
+      </section>
+      <section class="utility-card reminder-card panel-surface" aria-label="Upcoming reminders">
+        <header class="reminder-card-heading"><div><span>REMINDERS</span><strong id="reminderCardCount">None scheduled</strong></div><button id="notificationPermissionButton" type="button">Enable alerts</button></header>
+        <div class="reminder-preview-list" id="reminderPreviewList"><p>No upcoming reminders.</p></div>
+      </section>
       <button class="weekly-summary panel-surface" id="weeklySummaryButton" type="button"><span class="weekly-summary-top"><span>This week</span><strong id="weeklySummaryCount">0 / 0</strong></span><span class="weekly-summary-meter"><span id="weeklySummaryBar"></span></span><span class="weekly-summary-copy" id="weeklySummaryCopy">Set a weekly target and turn it into daily action.</span><span class="weekly-summary-action">Open weekly targets <span aria-hidden="true">→</span></span></button>
       <button class="desktop-widget-card panel-surface" id="desktopWidgetButton"><span class="widget-card-icon"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 9h8M8 13h5"/></svg></span><span class="widget-card-copy"><strong id="widgetCardTitle">Put today on your desktop</strong><small id="widgetCardText">Check off tasks without opening TaskNest.</small></span><span class="widget-card-action" id="widgetCardAction">Add widget</span></button>
       <div class="utility-note"><span class="status-dot"></span><span class="saved-note"><span></span>Saved automatically</span></div>
@@ -91,7 +101,18 @@
         <label class="edit-field">Description<textarea id="editDescription" maxlength="4000" rows="3" placeholder="Notes, links, or context…"></textarea></label>
         <div class="detail-grid three"><label class="edit-field">Status<select id="editStatus"><option value="open">Open</option><option value="completed">Completed</option></select></label><label class="edit-field">Priority<select id="editPriority"><option value="normal">Normal</option><option value="high">Important</option><option value="low">Whenever</option></select></label><label class="edit-field">Project<select id="editProject"><option value="">No project</option></select></label></div>
         <div class="detail-grid three"><label class="edit-field">Due date<input id="editDate" type="date"></label><label class="edit-field">Due time<input id="editTime" type="time"></label><label class="edit-field">Estimate<select id="editEstimate"><option value="">No estimate</option><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option><option value="240">4 hours</option></select></label></div>
-        <div class="detail-grid two"><label class="edit-field">Repeat<select id="editRecurrence"><option value="none">Does not repeat</option><option value="daily">Every day</option><option value="weekdays">Every weekday</option><option value="weekly">Every week</option><option value="monthly">Every month</option></select></label><label class="edit-field">Reminder<input id="editReminder" type="datetime-local"></label></div>
+        <p class="schedule-gap-note">Timed tasks keep a minimum two-hour buffer on the same day.</p>
+        <section class="schedule-editor">
+          <div class="schedule-heading"><div><span>SCHEDULE</span><strong>Repeat</strong></div><small id="recurrenceSummary">One-time task</small></div>
+          <div class="detail-grid two"><label class="edit-field">Pattern<select id="editRecurrence"><option value="none">Does not repeat</option><option value="daily">Every day</option><option value="weekly">Every week</option><option value="monthly">Every month</option><option value="weekdays">Specific weekdays</option><option value="custom">Custom repetition</option></select></label><label class="edit-field recurrence-interval-field hidden" id="recurrenceIntervalField">Repeat every<span class="repeat-interval-control"><input id="editRecurrenceInterval" type="number" min="1" max="99" value="1"><select id="editRecurrenceUnit"><option value="day">day(s)</option><option value="week">week(s)</option><option value="month">month(s)</option></select></span></label></div>
+          <div class="weekday-picker hidden" id="weekdayPicker" aria-label="Repeat on weekdays"><span>Repeat on</span><div><button type="button" data-weekday="1">M</button><button type="button" data-weekday="2">T</button><button type="button" data-weekday="3">W</button><button type="button" data-weekday="4">T</button><button type="button" data-weekday="5">F</button><button type="button" data-weekday="6">S</button><button type="button" data-weekday="0">S</button></div></div>
+        </section>
+        <section class="schedule-editor reminder-editor">
+          <div class="schedule-heading"><div><span>ALERTS</span><strong>Reminders</strong></div><small id="reminderSummary">No reminders</small></div>
+          <div class="reminder-add-row"><select id="reminderPreset" aria-label="Reminder time"><option value="15">15 minutes before</option><option value="30">30 minutes before</option><option value="60">1 hour before</option><option value="1440">1 day before</option><option value="0">At deadline</option><option value="custom">Choose exact time</option></select><input class="hidden" id="customReminderAt" type="datetime-local" aria-label="Exact reminder time"><button id="addReminderButton" type="button">Add reminder</button></div>
+          <p class="reminder-help" id="reminderHelp">Set a due date and time to use deadline reminders.</p>
+          <div class="reminder-edit-list" id="reminderEditList"></div>
+        </section>
         <section class="subtask-editor"><div class="subtask-heading"><strong>Subtasks</strong><span id="subtaskProgress">0 of 0</span></div><div class="subtask-edit-list" id="subtaskEditList"></div><div class="subtask-add-row"><input id="subtaskInput" maxlength="160" autocomplete="off" placeholder="Add a smaller step"><button id="subtaskAdd" type="button">Add</button></div></section>
         <div class="timestamp-row" id="timestampRow"></div>
       </div>
@@ -132,7 +153,15 @@
     </div>
   </dialog>
 
+  <section class="reminder-alert" id="reminderAlert" role="alert" aria-live="assertive">
+    <span class="reminder-alert-icon">◷</span>
+    <div><small>REMINDER</small><strong id="reminderAlertTitle">Task due soon</strong><span id="reminderAlertMeta">Open TaskNest to review it.</span></div>
+    <button id="reminderDoneButton" type="button">Done</button>
+    <button id="reminderSnoozeButton" type="button">Snooze 10m</button>
+    <button class="reminder-alert-close" id="reminderAlertClose" type="button" aria-label="Dismiss reminder">×</button>
+  </section>
+
   <div class="toast" id="toast" role="status"><span id="toastText">Saved</span><button id="toastUndo" class="hidden">Undo</button></div>
-  <script src="renderer.js?v=2.0.0"></script>
+  <script src="renderer.js?v=2.1.0"></script>
 </body>
 </html>

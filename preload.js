@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('tasknest', {
   loadTasks: () => ipcRenderer.invoke('tasks:load'),
   saveTasks: (tasks) => ipcRenderer.invoke('tasks:save', tasks),
   loadSettings: () => ipcRenderer.invoke('settings:load'),
+  saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),
   loadWeeklyTargets: () => ipcRenderer.invoke('targets:load'),
   saveWeeklyTargets: (targets) => ipcRenderer.invoke('targets:save', targets),
   loadProjects: () => ipcRenderer.invoke('projects:load'),
@@ -19,5 +20,6 @@ contextBridge.exposeInMainWorld('tasknest', {
   onTasksChanged: (callback) => ipcRenderer.on('tasks:changed', callback),
   onWeeklyTargetsChanged: (callback) => ipcRenderer.on('targets:changed', callback),
   onProjectsChanged: (callback) => ipcRenderer.on('projects:changed', callback),
+  onReminderDue: (callback) => ipcRenderer.on('reminder:due', (_event, reminder) => callback(reminder)),
   onWidgetSettings: (callback) => ipcRenderer.on('widget:settings', (_event, settings) => callback(settings))
 });

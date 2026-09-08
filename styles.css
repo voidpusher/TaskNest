@@ -1678,3 +1678,95 @@ button.recovery-choice:hover { border-color: #aabbb4; box-shadow: 0 8px 20px rgb
   .today-overdue-list,
   .lane-empty { min-height: 76px; }
 }
+
+/* Phase 4 — recurrence and reminders. */
+.schedule-editor { padding: 13px; border: 1px solid #d7dedb; border-radius: 9px; display: grid; gap: 11px; background: #f4f6f4; }
+.schedule-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
+.schedule-heading > div { display: grid; gap: 2px; }
+.schedule-heading > div span { color: #0a76d5; font-size: 7px; font-weight: 720; letter-spacing: .11em; }
+.schedule-heading strong { color: var(--ink); font-size: 12px; font-weight: 660; }
+.schedule-heading small { color: #748289; font-size: 9px; text-align: right; }
+.repeat-interval-control { display: grid; grid-template-columns: 64px minmax(0,1fr); gap: 7px; }
+.recurrence-interval-field.hidden,
+.weekday-picker.hidden,
+.reminder-add-row .hidden { display: none; }
+.weekday-picker { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.weekday-picker > span { color: #65757d; font-size: 9px; font-weight: 620; }
+.weekday-picker > div { display: flex; gap: 5px; }
+.weekday-picker button { width: 29px; height: 29px; padding: 0; border: 1px solid #cbd5d1; border-radius: 50%; color: #53656d; background: #fff; font-size: 9px; font-weight: 650; cursor: pointer; transition: border-color .16s, color .16s, background .16s, transform .16s; }
+.weekday-picker button:hover { border-color: #87b9e3; color: #0874d3; transform: translateY(-1px); }
+.weekday-picker button.selected { border-color: #0a84ff; color: #fff; background: #0a84ff; }
+.reminder-add-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto; gap: 7px; }
+.reminder-add-row select,
+.reminder-add-row input { min-width: 0; height: 36px; padding: 0 10px; border: 1px solid #cbd5d1; border-radius: 7px; outline: 0; color: var(--ink); background: #fff; font-size: 10px; color-scheme: light; }
+.reminder-add-row select:focus,
+.reminder-add-row input:focus { border-color: #0a84ff; box-shadow: 0 0 0 2px rgba(10,132,255,.1); }
+.reminder-add-row button { height: 36px; padding: 0 12px; border: 0; border-radius: 7px; color: #fff; background: #344d59; font-size: 9px; font-weight: 650; cursor: pointer; }
+.reminder-add-row button:hover { background: #273f4a; }
+.reminder-help { margin: -4px 0 0; color: #849197; font-size: 8px; }
+.reminder-edit-list { display: grid; }
+.reminder-edit-row { min-height: 39px; border-top: 1px solid #dce2df; display: grid; grid-template-columns: minmax(0,1fr) 26px; align-items: center; gap: 8px; }
+.reminder-edit-row > span { min-width: 0; display: grid; gap: 2px; }
+.reminder-edit-row strong { overflow: hidden; color: #405159; font-size: 10px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.reminder-edit-row small { color: #8b979c; font-size: 8px; }
+.reminder-edit-row button { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; color: #8b979c; background: transparent; font-size: 16px; cursor: pointer; }
+.reminder-edit-row button:hover { color: #d8322a; background: #f6dfdc; }
+.reminder-empty { margin: 0; padding: 7px 0 1px; border-top: 1px solid #dce2df; color: #849197; font-size: 9px; }
+.schedule-gap-note { margin: -8px 1px 0; color: #7f8c92; font-size: 8px; }
+
+.time-target-card { display: grid; gap: 10px; }
+.time-target-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.time-target-heading > div { min-width: 0; display: grid; gap: 3px; }
+.time-target-heading span { color: #7b898f; font-size: 7px; font-weight: 700; letter-spacing: .1em; }
+.time-target-heading strong { overflow: hidden; color: var(--ink); font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.time-target-heading button { padding: 4px 6px; border: 0; border-radius: 5px; color: #78868c; background: transparent; font-size: 8px; cursor: pointer; }
+.time-target-heading button:hover { color: #d8322a; background: #f8e7e4; }
+.time-target-setup { display: grid; gap: 8px; }
+.time-preset-row { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 5px; }
+.time-preset-row button { height: 29px; border: 1px solid #cbd5d1; border-radius: 6px; color: #315466; background: #fff; font-size: 8px; font-weight: 650; cursor: pointer; }
+.time-preset-row button:hover { border-color: #0a84ff; color: #0874d3; background: #f2f8fe; transform: translateY(-1px); }
+.time-target-setup label { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 6px; color: #7b898f; font-size: 8px; }
+.time-target-setup input { min-width: 0; height: 28px; padding: 0 7px; border: 1px solid #cbd5d1; border-radius: 6px; color: var(--ink); background: #fff; font-size: 9px; color-scheme: light; }
+.time-target-setup label button { height: 28px; padding: 0 9px; border: 0; border-radius: 6px; color: #fff; background: #344d59; font-size: 8px; font-weight: 650; cursor: pointer; }
+.time-target-live { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 5px 8px; }
+.time-target-live.hidden,
+.time-target-setup.hidden { display: none; }
+.time-target-live strong { color: #0874d3; font-size: 17px; font-weight: 680; letter-spacing: -.025em; font-variant-numeric: tabular-nums; }
+.time-target-live > span { color: #7b898f; font-size: 8px; }
+.time-target-meter { height: 4px; border-radius: 99px; grid-column: 1 / -1; overflow: hidden; background: #dde4e1; }
+.time-target-meter span { width: 0; height: 100%; display: block; border-radius: inherit; background: #0a84ff; transition: width .5s linear; }
+
+.reminder-card { display: grid; gap: 11px; }
+.reminder-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.reminder-card-heading > div { min-width: 0; display: grid; gap: 3px; }
+.reminder-card-heading span { color: #7b898f; font-size: 7px; font-weight: 700; letter-spacing: .1em; }
+.reminder-card-heading strong { overflow: hidden; color: var(--ink); font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.reminder-card-heading button { padding: 5px 7px; border: 1px solid #cbd6d1; border-radius: 6px; color: #1269aa; background: #fff; font-size: 8px; cursor: pointer; }
+.reminder-card-heading button:hover:not(:disabled) { border-color: #83b7e3; background: #f2f8fe; }
+.reminder-card-heading button:disabled { color: #7f8c92; cursor: default; }
+.reminder-preview-list { display: grid; }
+.reminder-preview-list > p { margin: 0; padding: 6px 0; color: #849197; font-size: 9px; }
+.reminder-preview-list button { min-width: 0; padding: 7px 0; border: 0; border-top: 1px solid #e2e7e4; display: grid; gap: 2px; color: var(--ink); background: transparent; text-align: left; cursor: pointer; }
+.reminder-preview-list button:hover span { color: #0874d3; }
+.reminder-preview-list span { overflow: hidden; font-size: 9px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.reminder-preview-list small { color: #849197; font-size: 8px; }
+
+.reminder-alert { position: fixed; z-index: 1000; right: 22px; bottom: 22px; width: min(480px, calc(100vw - 28px)); min-height: 72px; padding: 12px 42px 12px 13px; border: 1px solid #bdcbc5; border-radius: 13px; display: grid; grid-template-columns: 34px minmax(0,1fr) auto auto; align-items: center; gap: 10px; color: var(--ink); background: #fff; box-shadow: 0 22px 60px rgba(28,47,56,.22); opacity: 0; pointer-events: none; transform: translateY(18px) scale(.98); transition: opacity .2s ease, transform .2s ease; }
+.reminder-alert.show { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
+.reminder-alert-icon { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: #0874d3; background: #e8f3fd; font-size: 17px; }
+.reminder-alert > div { min-width: 0; display: grid; gap: 2px; }
+.reminder-alert small { color: #0874d3; font-size: 7px; font-weight: 720; letter-spacing: .1em; }
+.reminder-alert strong { overflow: hidden; font-size: 11px; font-weight: 660; text-overflow: ellipsis; white-space: nowrap; }
+.reminder-alert > div span { color: #748289; font-size: 8px; }
+.reminder-alert > button:not(.reminder-alert-close) { height: 31px; padding: 0 10px; border: 1px solid #cbd5d1; border-radius: 7px; color: #42545c; background: #fff; font-size: 8px; font-weight: 650; cursor: pointer; }
+.reminder-alert > button:not(.reminder-alert-close):hover { border-color: #0a84ff; color: #0874d3; background: #f2f8fe; }
+.reminder-alert-close { position: absolute; top: 8px; right: 8px; width: 25px; height: 25px; padding: 0; border: 0; border-radius: 6px; color: #879399; background: transparent; font-size: 17px; cursor: pointer; }
+.reminder-alert-close:hover { color: #d8322a; background: #f8e7e4; }
+
+@media (max-width: 700px) {
+  .weekday-picker { align-items: flex-start; flex-direction: column; }
+  .weekday-picker > div { width: 100%; justify-content: space-between; }
+  .reminder-add-row { grid-template-columns: 1fr; }
+  .reminder-alert { right: 14px; bottom: 14px; grid-template-columns: 32px minmax(0,1fr); }
+  .reminder-alert > button:not(.reminder-alert-close) { grid-column: span 1; }
+}
