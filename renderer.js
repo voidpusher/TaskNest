@@ -207,6 +207,7 @@ function normalizeClientTask(task) {
     occurrenceKey: task.occurrenceKey || null,
     seriesId: task.seriesId || null,
     weeklyTargetId: task.weeklyTargetId || null,
+    timeTargetId: task.timeTargetId || null,
     actualSeconds: Math.max(0, Math.round(Number(task.actualSeconds) || 0)),
     focusNotes: String(task.focusNotes || '').slice(0, 4000),
     focusSessions: Array.isArray(task.focusSessions) ? task.focusSessions.slice(-200).map((session) => ({
@@ -513,7 +514,7 @@ function newTask(title, overrides = {}) {
     date: selectedDate, dueTime: null, estimatedMinutes: null, projectId: null, subtasks: [], recurrence: 'none',
     recurrenceRule: normalizedRecurrenceRule({ recurrence: 'none' }, selectedDate), reminders: [], reminderAt: null,
     createdAt: now, completedAt: null, updatedAt: now, order: nextTaskOrder(), occurrenceKey: null,
-    seriesId: null, weeklyTargetId: null, actualSeconds: 0, focusNotes: '', focusSessions: [], activeSession: null, ...overrides
+    seriesId: null, weeklyTargetId: null, timeTargetId: null, actualSeconds: 0, focusNotes: '', focusSessions: [], activeSession: null, ...overrides
   });
 }
 
@@ -579,7 +580,7 @@ function createNextOccurrence(task) {
     subtasks: task.subtasks.map((subtask) => ({ ...subtask, id: uid('subtask'), done: false, completedAt: null, createdAt: Date.now() })),
     reminders: task.reminders.map((reminder) => ({ ...reminder, id: uid('reminder'), at: reminder.kind === 'exact' ? shiftExactReminder(reminder.at, task.date, nextDate) : null, snoozedUntil: null, dismissedAt: null, lastTriggeredAt: null })),
     reminderAt: null,
-    actualSeconds: 0, focusNotes: '', focusSessions: [], activeSession: null
+    timeTargetId: null, actualSeconds: 0, focusNotes: '', focusSessions: [], activeSession: null
   });
   tasks.push(next);
   touch(task);
@@ -744,6 +745,7 @@ function taskMetaHtml(task) {
   if (task.reminders.length) pieces.push(`<span>◷ ${task.reminders.length} reminder${task.reminders.length === 1 ? '' : 's'}</span>`);
   if (task.subtasks.length) pieces.push(`<span>${task.subtasks.filter((item) => item.done).length}/${task.subtasks.length} steps</span>`);
   if (task.weeklyTargetId) pieces.push('<span>Weekly target</span>');
+  if (task.timeTargetId) pieces.push('<span>Time block</span>');
   if (task.actualSeconds) pieces.push(`<span>${formatCompactDuration(task.actualSeconds)} focused</span>`);
   if (task.activeSession) pieces.push(`<span class="focus-live-meta">${task.activeSession.running ? '● In focus' : 'Paused focus'}</span>`);
   return pieces.join('');
@@ -1076,6 +1078,9 @@ function renderTimeTarget() {
   $('clearTimeTarget').classList.toggle('hidden', !active);
   if (!active) {
     $('timeTargetTitle').textContent = 'Set a focused window';
+    $('timeTargetTaskList').innerHTML = '';
+    $('timeTargetTaskList').dataset.signature = '';
+    $('timeTargetTaskProgress').textContent = '0 / 0 done';
     return;
   }
   const now = Date.now();
@@ -1086,11 +1091,28 @@ function renderTimeTarget() {
   $('timeTargetRemaining').textContent = remainingSeconds ? formatClock(remainingSeconds) : 'Complete';
   $('timeTargetEnds').textContent = remainingSeconds ? `Ends at ${formatClockTime(timeTarget.endsAt)}` : `Finished at ${formatClockTime(timeTarget.endsAt)}`;
   $('timeTargetBar').style.width = `${progress}%`;
+  renderTimeTargetTasks();
   if (!remainingSeconds && !timeTarget.notifiedAt) {
     timeTarget.notifiedAt = now;
     saveTimeTarget('Time target complete');
     if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('Time target complete', { body: `${timeTarget.label || 'Focused window'} is finished.`, icon: 'assets/tasknest-icon.svg' });
   }
+}
+
+function renderTimeTargetTasks() {
+  if (!timeTarget) return;
+  const blockTasks = sortedTasks(activeTasks().filter((task) => task.timeTargetId === timeTarget.id));
+  const completed = blockTasks.filter((task) => task.done).length;
+  $('timeTargetTaskProgress').textContent = `${completed} / ${blockTasks.length} done`;
+  const list = $('timeTargetTaskList');
+  const signature = blockTasks.map((task) => `${task.id}:${task.done ? 1 : 0}:${task.title}`).join('|');
+  if (list.dataset.signature === signature) return;
+  list.dataset.signature = signature;
+  list.innerHTML = blockTasks.length ? blockTasks.map((task) => `
+    <div class="time-target-task ${task.done ? 'done' : ''}" data-task-id="${escapeHtml(task.id)}">
+      <button class="time-target-check" data-time-target-action="toggle" type="button" aria-label="${task.done ? 'Reopen' : 'Complete'} ${escapeHtml(task.title)}"><span>✓</span></button>
+      <button class="time-target-task-title" data-time-target-action="edit" type="button">${escapeHtml(task.title)}</button>
+    </div>`).join('') : '<p class="time-target-task-empty">Add what you want to finish inside this block.</p>';
 }
 
 function startTimeTarget(endsAt, label) {
@@ -1334,7 +1356,7 @@ function openEditor(task = null) {
 function duplicateTask(task) {
   const duplicate = newTask(`${task.title} copy`, {
     ...task, id: uid(), title: `${task.title} copy`, status: 'open', done: false, archived: false, deletedAt: null,
-    completedAt: null, createdAt: Date.now(), updatedAt: Date.now(), order: nextTaskOrder(), seriesId: null, occurrenceKey: null, reminderAt: null,
+    completedAt: null, createdAt: Date.now(), updatedAt: Date.now(), order: nextTaskOrder(), seriesId: null, occurrenceKey: null, reminderAt: null, timeTargetId: null,
     reminders: task.reminders.map((reminder) => ({ ...reminder, id: uid('reminder'), snoozedUntil: null, dismissedAt: null, lastTriggeredAt: null })),
     actualSeconds: 0, focusNotes: '', focusSessions: [], activeSession: null,
     subtasks: task.subtasks.map((subtask) => ({ ...subtask, id: uid('subtask'), done: false, completedAt: null, createdAt: Date.now() }))
@@ -1713,6 +1735,29 @@ $('startUntilTarget').addEventListener('click', () => {
   startTimeTarget(end.getTime(), `Until ${formatClockTime(end.getTime())}`);
 });
 $('clearTimeTarget').addEventListener('click', () => { timeTarget = null; saveTimeTarget('Time target cleared'); });
+$('timeTargetTaskForm').addEventListener('submit', (event) => {
+  event.preventDefault();
+  if (!timeTarget) return showToast('Start a time target first');
+  const input = $('timeTargetTaskInput');
+  const title = input.value.trim();
+  if (!title) return input.focus();
+  const task = newTask(title, { date: localDateKey(new Date()), timeTargetId: timeTarget.id });
+  tasks.push(task);
+  input.value = '';
+  persist('Added to this time target');
+  render();
+  input.focus();
+});
+$('timeTargetTaskList').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-time-target-action]');
+  const row = button?.closest('[data-task-id]');
+  const task = tasks.find((item) => item.id === row?.dataset.taskId);
+  if (!task) return;
+  if (button.dataset.timeTargetAction === 'edit') return openEditor(task);
+  const next = setTaskCompletion(task, !task.done);
+  persist(next ? 'Completed · next recurring task created' : task.done ? 'Block task completed' : 'Block task reopened');
+  render();
+});
 $('notificationPermissionButton').addEventListener('click', async () => {
   if (!('Notification' in window)) return showToast('Browser notifications are unavailable here');
   const permission = await Notification.requestPermission();

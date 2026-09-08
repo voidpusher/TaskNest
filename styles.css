@@ -1735,6 +1735,23 @@ button.recovery-choice:hover { border-color: #aabbb4; box-shadow: 0 8px 20px rgb
 .time-target-live > span { color: #7b898f; font-size: 8px; }
 .time-target-meter { height: 4px; border-radius: 99px; grid-column: 1 / -1; overflow: hidden; background: #dde4e1; }
 .time-target-meter span { width: 0; height: 100%; display: block; border-radius: inherit; background: #0a84ff; transition: width .5s linear; }
+.time-target-tasks { grid-column: 1 / -1; margin-top: 3px; padding-top: 8px; border-top: 1px solid #dce3e0; display: grid; gap: 6px; }
+.time-target-task-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.time-target-task-heading span { color: #7b898f; font-size: 7px; font-weight: 700; letter-spacing: .1em; }
+.time-target-task-heading strong { color: #69787e; font-size: 8px; font-weight: 620; letter-spacing: 0; }
+.time-target-task-form { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 5px; }
+.time-target-task-form input { min-width: 0; height: 30px; padding: 0 8px; border: 1px solid #cad5d0; border-radius: 6px; color: var(--ink); background: #fff; font: inherit; font-size: 9px; outline: 0; }
+.time-target-task-form input:focus { border-color: #67a9dc; box-shadow: 0 0 0 2px rgba(10,132,255,.11); }
+.time-target-task-form button { height: 30px; padding: 0 10px; border: 0; border-radius: 6px; color: #fff; background: #0a84ff; font-size: 8px; font-weight: 680; cursor: pointer; }
+.time-target-task-list { max-height: 104px; overflow-y: auto; display: grid; scrollbar-width: thin; }
+.time-target-task { min-height: 31px; border-top: 1px solid #e2e7e4; display: grid; grid-template-columns: 20px minmax(0,1fr); align-items: center; gap: 6px; }
+.time-target-check { width: 17px; height: 17px; padding: 0; border: 1px solid #aebdb7; border-radius: 5px; display: grid; place-items: center; color: transparent; background: #fff; cursor: pointer; }
+.time-target-check span { font-size: 10px; line-height: 1; }
+.time-target-task.done .time-target-check { border-color: #0a84ff; color: #fff; background: #0a84ff; }
+.time-target-task-title { min-width: 0; padding: 5px 0; border: 0; overflow: hidden; color: #344b55; background: transparent; font-size: 9px; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.time-target-task-title:hover { color: #0874d3; }
+.time-target-task.done .time-target-task-title { color: #8d999e; text-decoration: line-through; }
+.time-target-task-empty { margin: 0; padding: 4px 0 1px; color: #849197; font-size: 8px; line-height: 1.45; }
 
 .reminder-card { display: grid; gap: 11px; }
 .reminder-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

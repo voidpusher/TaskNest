@@ -163,6 +163,7 @@ function normalizeTask(task) {
     occurrenceKey: task.occurrenceKey ? String(task.occurrenceKey).slice(0, 260) : null,
     seriesId: task.seriesId ? String(task.seriesId).slice(0, 120) : null,
     weeklyTargetId: task.weeklyTargetId ? String(task.weeklyTargetId).slice(0, 120) : null,
+    timeTargetId: task.timeTargetId ? String(task.timeTargetId).slice(0, 120) : null,
     actualSeconds: Math.max(0, Math.min(31536000, Math.round(Number(task.actualSeconds) || 0))),
     focusNotes: String(task.focusNotes || '').slice(0, 4000),
     focusSessions,
