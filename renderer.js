@@ -55,6 +55,9 @@ const bulkBar = $('bulkBar');
 const voiceButton = $('voiceButton');
 const voiceStatus = $('voiceStatus');
 const voiceLanguage = $('voiceLanguage');
+const todayCommand = $('todayCommand');
+const focusDialog = $('focusDialog');
+const recoveryDialog = $('recoveryDialog');
 
 let tasks = [];
 let weeklyTargets = [];
@@ -83,6 +86,10 @@ let voiceInterimTranscript = '';
 let voiceStopRequested = false;
 let voiceTimeoutTimer = null;
 let voiceFinishTimer = null;
+let focusTaskId = null;
+let recoveryTaskId = null;
+let focusTimerInterval = null;
+let focusNoteTimer = null;
 
 const VOICE_LANGUAGE_KEY = 'tasknest-voice-language';
 
@@ -91,7 +98,9 @@ const icon = {
   edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16-.8 4 4-.8L18 8.4 14.6 5 4 16ZM13.5 6.1l3.4 3.4"/></svg>',
   copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
   trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>',
-  drag: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="1"/><circle cx="15" cy="7" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="17" r="1"/><circle cx="15" cy="17" r="1"/></svg>'
+  drag: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="1"/><circle cx="15" cy="7" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="17" r="1"/><circle cx="15" cy="17" r="1"/></svg>',
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 9 6-9 6V6Z"/></svg>',
+  recover: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4m0 0h4M4 4l4 4a7 7 0 1 1-1.4 7.9"/></svg>'
 };
 
 function uid(prefix = 'task') {
@@ -153,7 +162,23 @@ function normalizeClientTask(task) {
     updatedAt: Number(task.updatedAt) || Number(task.completedAt) || createdAt,
     order: Number.isFinite(Number(task.order)) ? Number(task.order) : createdAt,
     seriesId: task.seriesId || null,
-    weeklyTargetId: task.weeklyTargetId || null
+    weeklyTargetId: task.weeklyTargetId || null,
+    actualSeconds: Math.max(0, Math.round(Number(task.actualSeconds) || 0)),
+    focusNotes: String(task.focusNotes || '').slice(0, 4000),
+    focusSessions: Array.isArray(task.focusSessions) ? task.focusSessions.slice(-200).map((session) => ({
+      id: String(session.id || uid('session')),
+      startedAt: Number(session.startedAt) || createdAt,
+      endedAt: Number(session.endedAt) || null,
+      durationSeconds: Math.max(0, Math.round(Number(session.durationSeconds) || 0)),
+      completed: Boolean(session.completed)
+    })) : [],
+    activeSession: task.activeSession && typeof task.activeSession === 'object' ? {
+      id: String(task.activeSession.id || uid('session')),
+      startedAt: Number(task.activeSession.startedAt) || Date.now(),
+      accumulatedSeconds: Math.max(0, Number(task.activeSession.accumulatedSeconds) || 0),
+      lastResumedAt: Number(task.activeSession.lastResumedAt) || null,
+      running: Boolean(task.activeSession.running)
+    } : null
   };
 }
 
@@ -443,7 +468,7 @@ function newTask(title, overrides = {}) {
     id: uid(), title, description: '', status: 'open', done: false, priority: 'normal', archived: false,
     date: selectedDate, dueTime: null, estimatedMinutes: null, projectId: null, subtasks: [], recurrence: 'none',
     reminderAt: null, createdAt: now, completedAt: null, updatedAt: now, order: nextTaskOrder(),
-    seriesId: null, weeklyTargetId: null, ...overrides
+    seriesId: null, weeklyTargetId: null, actualSeconds: 0, focusNotes: '', focusSessions: [], activeSession: null, ...overrides
   });
 }
 
@@ -477,7 +502,8 @@ function createNextOccurrence(task) {
     id: uid(), date: nextDate, status: 'open', done: false, archived: false, deletedAt: null,
     completedAt: null, createdAt: Date.now(), updatedAt: Date.now(), order: nextTaskOrder(), seriesId,
     subtasks: task.subtasks.map((subtask) => ({ ...subtask, id: uid('subtask'), done: false, completedAt: null, createdAt: Date.now() })),
-    reminderAt: task.reminderAt ? task.reminderAt + dayDelta * 86400000 : null
+    reminderAt: task.reminderAt ? task.reminderAt + dayDelta * 86400000 : null,
+    actualSeconds: 0, focusNotes: '', focusSessions: [], activeSession: null
   });
   tasks.push(next);
   touch(task);
@@ -485,6 +511,7 @@ function createNextOccurrence(task) {
 }
 
 function setTaskCompletion(task, done) {
+  if (done && task.activeSession) commitFocusSession(task, true);
   task.done = done;
   task.status = done ? 'completed' : 'open';
   task.completedAt = done ? Date.now() : null;
@@ -557,13 +584,191 @@ function taskMetaHtml(task) {
   if (task.reminderAt) pieces.push('<span>◷ Reminder</span>');
   if (task.subtasks.length) pieces.push(`<span>${task.subtasks.filter((item) => item.done).length}/${task.subtasks.length} steps</span>`);
   if (task.weeklyTargetId) pieces.push('<span>Weekly target</span>');
+  if (task.actualSeconds) pieces.push(`<span>${formatCompactDuration(task.actualSeconds)} focused</span>`);
+  if (task.activeSession) pieces.push(`<span class="focus-live-meta">${task.activeSession.running ? '● In focus' : 'Paused focus'}</span>`);
   return pieces.join('');
+}
+
+function formatCompactDuration(seconds) {
+  const rawSeconds = Math.max(0, Number(seconds) || 0);
+  if (rawSeconds < 60) return `${Math.round(rawSeconds)}s`;
+  const roundedMinutes = Math.max(1, Math.round(rawSeconds / 60));
+  if (roundedMinutes < 60) return `${roundedMinutes}m`;
+  const hours = Math.floor(roundedMinutes / 60);
+  const minutes = roundedMinutes % 60;
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
+function formatClock(seconds) {
+  const value = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = String(Math.floor(value / 3600)).padStart(2, '0');
+  const minutes = String(Math.floor(value % 3600 / 60)).padStart(2, '0');
+  const secs = String(value % 60).padStart(2, '0');
+  return `${hours}:${minutes}:${secs}`;
+}
+
+function priorityRank(task) {
+  return { high: 0, normal: 1, low: 2 }[task.priority] ?? 1;
+}
+
+function todayPriorityTasks() {
+  const today = localDateKey(new Date());
+  return activeTasks().filter((task) => task.date === today && !task.done)
+    .sort((a, b) => priorityRank(a) - priorityRank(b) || String(a.dueTime || '99:99').localeCompare(String(b.dueTime || '99:99')) || a.order - b.order)
+    .slice(0, 3);
+}
+
+function sessionElapsed(task) {
+  const session = task?.activeSession;
+  if (!session) return 0;
+  const liveSeconds = session.running && session.lastResumedAt ? (Date.now() - session.lastResumedAt) / 1000 : 0;
+  return Math.max(0, Number(session.accumulatedSeconds || 0) + liveSeconds);
+}
+
+function commitFocusSession(task, completed = false) {
+  if (!task?.activeSession) return 0;
+  const session = task.activeSession;
+  const durationSeconds = Math.max(1, Math.round(sessionElapsed(task)));
+  task.actualSeconds = Math.max(0, Number(task.actualSeconds) || 0) + durationSeconds;
+  task.focusSessions.push({ id: session.id, startedAt: session.startedAt, endedAt: Date.now(), durationSeconds, completed });
+  task.focusSessions = task.focusSessions.slice(-200);
+  task.activeSession = null;
+  touch(task);
+  return durationSeconds;
+}
+
+function renderTodayCommand() {
+  const isToday = activeView === 'today';
+  todayCommand.classList.toggle('hidden', !isToday);
+  if (!isToday) return;
+  const today = localDateKey(new Date());
+  const todayTasks = activeTasks().filter((task) => task.date === today);
+  const openToday = todayTasks.filter((task) => !task.done);
+  const overdue = activeTasks().filter((task) => !task.done && task.date && task.date < today)
+    .sort((a, b) => a.date.localeCompare(b.date) || priorityRank(a) - priorityRank(b) || a.order - b.order);
+  const estimatedMinutes = openToday.reduce((sum, task) => sum + (task.estimatedMinutes || 0), 0);
+  const unestimated = openToday.filter((task) => !task.estimatedMinutes).length;
+  const completed = todayTasks.filter((task) => task.done).length;
+  const percentage = todayTasks.length ? Math.round(completed / todayTasks.length * 100) : 0;
+  const priorities = todayPriorityTasks();
+
+  $('todayWorkload').textContent = estimatedMinutes ? formatCompactDuration(estimatedMinutes * 60) : '0m';
+  $('todayWorkloadNote').textContent = unestimated ? `${unestimated} without estimate` : estimatedMinutes ? 'fully estimated' : 'No estimates yet';
+  $('todayRemaining').textContent = openToday.length;
+  $('todayOverdueCount').textContent = overdue.length;
+  $('todayProgress').textContent = `${percentage}%`;
+  $('todayProgressNote').textContent = percentage === 100 ? 'Day complete' : completed ? `${completed} finished` : 'Start with one win';
+  $('topPriorityCount').textContent = `${priorities.length} selected`;
+
+  $('topPriorityList').innerHTML = priorities.length ? priorities.map((task, index) => `
+    <article class="priority-row" data-task-id="${escapeHtml(task.id)}">
+      <span class="priority-number">${index + 1}</span>
+      <button class="priority-copy" data-today-action="edit" type="button"><strong>${escapeHtml(task.title)}</strong><small><span class="priority-dot ${task.priority}"></span>${task.dueTime ? escapeHtml(task.dueTime) : 'Any time'}${task.estimatedMinutes ? ` · ${formatCompactDuration(task.estimatedMinutes * 60)}` : ''}</small></button>
+      <button class="priority-start ${task.activeSession?.running ? 'active' : ''}" data-today-action="focus" type="button" aria-label="${task.activeSession?.running ? 'Resume' : 'Focus on'} ${escapeHtml(task.title)}" title="${task.activeSession?.running ? 'Resume focus' : 'Start focus'}">${task.activeSession?.running ? 'Resume' : 'Focus'}</button>
+    </article>`).join('') : '<div class="lane-empty"><strong>You are clear.</strong><span>Add a task to build today’s priority queue.</span></div>';
+
+  $('todayOverdueList').innerHTML = overdue.length ? overdue.slice(0, 2).map((task) => `
+    <article class="overdue-mini" data-task-id="${escapeHtml(task.id)}"><div><strong>${escapeHtml(task.title)}</strong><span>${escapeHtml(taskDateLabel(task))} · ${task.priority === 'high' ? 'Important' : 'Needs a decision'}</span></div><button data-today-action="recover" type="button">Recover</button></article>`).join('') : '<div class="lane-empty"><strong>Nothing overdue.</strong><span>Your plan is up to date.</span></div>';
+}
+
+function renderFocusClock(task) {
+  if (!task || !task.activeSession) return;
+  const elapsed = sessionElapsed(task);
+  const total = Number(task.actualSeconds || 0) + elapsed;
+  $('focusTimer').textContent = formatClock(elapsed);
+  $('focusTimerState').textContent = task.activeSession.running ? 'Session running' : 'Session paused';
+  $('focusActual').textContent = total ? formatCompactDuration(total) : '0m';
+  $('focusPause').textContent = task.activeSession.running ? 'Pause' : 'Resume';
+  const estimateSeconds = Number(task.estimatedMinutes || 0) * 60;
+  const progress = estimateSeconds ? Math.min(100, Math.round(elapsed / estimateSeconds * 100)) : Math.min(100, Math.round(elapsed / 1500 * 100));
+  $('focusOrbit').style.setProperty('--focus-progress', `${progress * 3.6}deg`);
+}
+
+function renderFocusDialog(task) {
+  if (!task) return;
+  $('focusTaskTitle').textContent = task.title;
+  const project = projectById(task.projectId);
+  $('focusTaskMeta').textContent = [project?.name, task.dueTime ? `Due ${task.dueTime}` : null, task.priority === 'high' ? 'Important' : null].filter(Boolean).join(' · ') || 'Stay with one thing.';
+  $('focusEstimate').textContent = task.estimatedMinutes ? formatCompactDuration(task.estimatedMinutes * 60) : 'Not set';
+  const completedSubtasks = task.subtasks.filter((subtask) => subtask.done).length;
+  $('focusSubtaskProgress').textContent = `${completedSubtasks} of ${task.subtasks.length}`;
+  $('focusSubtasks').innerHTML = task.subtasks.length ? task.subtasks.map((subtask) => `<label class="focus-subtask ${subtask.done ? 'done' : ''}" data-subtask-id="${escapeHtml(subtask.id)}"><input type="checkbox" ${subtask.done ? 'checked' : ''}><span>${escapeHtml(subtask.title)}</span></label>`).join('') : '<button class="focus-empty-steps" data-focus-action="add-subtasks" type="button"><strong>No subtasks yet</strong><span>Break this task into smaller steps →</span></button>';
+  if (document.activeElement !== $('focusNotes')) $('focusNotes').value = task.focusNotes || '';
+  renderFocusClock(task);
+}
+
+function startFocus(task) {
+  if (!task || task.done) return;
+  const now = Date.now();
+  for (const other of activeTasks().filter((item) => item.id !== task.id && item.activeSession?.running)) {
+    other.activeSession.accumulatedSeconds = sessionElapsed(other);
+    other.activeSession.lastResumedAt = null;
+    other.activeSession.running = false;
+    touch(other);
+  }
+  if (!task.activeSession) task.activeSession = { id: uid('session'), startedAt: now, accumulatedSeconds: 0, lastResumedAt: now, running: true };
+  else if (!task.activeSession.running) { task.activeSession.running = true; task.activeSession.lastResumedAt = now; }
+  touch(task);
+  focusTaskId = task.id;
+  persist('Focus session started');
+  render();
+  renderFocusDialog(task);
+  if (!focusDialog.open) focusDialog.showModal();
+  clearInterval(focusTimerInterval);
+  focusTimerInterval = setInterval(() => renderFocusClock(tasks.find((item) => item.id === focusTaskId)), 1000);
+}
+
+function toggleFocusPause() {
+  const task = tasks.find((item) => item.id === focusTaskId);
+  if (!task?.activeSession) return;
+  if (task.activeSession.running) {
+    task.activeSession.accumulatedSeconds = sessionElapsed(task);
+    task.activeSession.lastResumedAt = null;
+    task.activeSession.running = false;
+  } else {
+    task.activeSession.running = true;
+    task.activeSession.lastResumedAt = Date.now();
+  }
+  touch(task);
+  persist(task.activeSession.running ? 'Focus resumed' : 'Focus paused');
+  renderFocusClock(task);
+  renderTodayCommand();
+}
+
+function finishFocusSession(completeTask = false) {
+  const task = tasks.find((item) => item.id === focusTaskId);
+  if (!task?.activeSession) return;
+  const duration = commitFocusSession(task, completeTask);
+  if (completeTask) setTaskCompletion(task, true);
+  persist(completeTask ? `Task completed · ${formatCompactDuration(duration)} focused` : `Session saved · ${formatCompactDuration(duration)}`);
+  focusDialog.close();
+  render();
+}
+
+function openRecovery(task) {
+  if (!task || task.done) return;
+  recoveryTaskId = task.id;
+  $('recoveryTaskTitle').textContent = task.title;
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  $('recoveryDate').value = localDateKey(tomorrow);
+  $('recoveryPriority').value = task.priority;
+  recoveryDialog.showModal();
+}
+
+function completeRecovery(task, message) {
+  touch(task);
+  recoveryDialog.close();
+  persist(message);
+  render();
 }
 
 function renderTaskList() {
   const visible = visibleTasks();
+  const today = localDateKey(new Date());
   taskList.classList.toggle('selection-mode', selectionMode);
-  taskList.innerHTML = visible.map((task) => `
+  taskList.innerHTML = visible.map((task) => {
+    const missed = !task.done && task.date && task.date < today;
+    return `
     <article class="task-item ${task.done ? 'done' : ''} ${selectedTaskIds.has(task.id) ? 'selected' : ''}" data-id="${escapeHtml(task.id)}" draggable="${selectionMode ? 'false' : 'true'}">
       <label class="bulk-check-wrap" aria-label="Select ${escapeHtml(task.title)}"><input class="bulk-check" data-select-id="${escapeHtml(task.id)}" type="checkbox" ${selectedTaskIds.has(task.id) ? 'checked' : ''}><span></span></label>
       <button class="task-check" data-action="toggle" aria-label="${task.done ? 'Mark as open' : 'Mark as complete'}">${icon.check}</button>
@@ -572,11 +777,13 @@ function renderTaskList() {
         ${task.description ? `<span class="task-description">${escapeHtml(task.description)}</span>` : ''}
         <span class="task-meta">${taskMetaHtml(task)}</span>
       </div>
+      ${task.done ? '<span class="task-action-spacer"></span>' : `<button class="task-action phase-task-action ${task.activeSession?.running ? 'active' : ''}" data-action="${missed ? 'recover' : 'focus'}" aria-label="${missed ? 'Recover missed task' : 'Start focus mode'}" title="${missed ? 'Recover' : 'Focus'}">${missed ? icon.recover : icon.play}</button>`}
       <button class="task-action duplicate-task" data-action="duplicate" aria-label="Duplicate task" title="Duplicate">${icon.copy}</button>
       <button class="task-action edit-task" data-action="edit" aria-label="Edit task" title="Edit">${icon.edit}</button>
       <button class="task-action delete-task" data-action="delete" aria-label="Delete task" title="Delete">${icon.trash}</button>
       <span class="drag-handle" aria-label="Drag to reorder" title="Drag to reorder">${icon.drag}</span>
-    </article>`).join('');
+    </article>`;
+  }).join('');
   taskList.querySelectorAll('[data-project-color]').forEach((element) => { element.style.setProperty('--project-color', element.dataset.projectColor); });
   emptyState.classList.toggle('hidden', visible.length > 0);
   taskList.classList.toggle('hidden', visible.length === 0);
@@ -734,9 +941,11 @@ function renderSpecialUtility() {
 function render() {
   const special = ['weekly', 'projects'].includes(activeView);
   $('taskView').classList.toggle('hidden', special);
+  $('taskView').classList.toggle('today-mode', activeView === 'today');
   $('weeklyPage').classList.toggle('hidden', activeView !== 'weekly');
   $('projectsPage').classList.toggle('hidden', activeView !== 'projects');
   if (!special) { renderHeaderAndProgress(); renderTaskList(); }
+  renderTodayCommand();
   renderNav();
   renderHistory();
   renderCalendar();
@@ -745,6 +954,7 @@ function render() {
   if (special) renderSpecialUtility();
   renderWidgetCard();
   renderBulkBar();
+  $('taskListHeading').textContent = activeView === 'today' ? 'All today’s tasks' : activeView === 'overdue' ? 'Missed tasks' : 'Tasks';
 }
 
 function defaultQuickTaskOverrides() {
@@ -802,6 +1012,7 @@ function duplicateTask(task) {
   const duplicate = newTask(`${task.title} copy`, {
     ...task, id: uid(), title: `${task.title} copy`, status: 'open', done: false, archived: false, deletedAt: null,
     completedAt: null, createdAt: Date.now(), updatedAt: Date.now(), order: nextTaskOrder(), seriesId: null, reminderAt: null,
+    actualSeconds: 0, focusNotes: '', focusSessions: [], activeSession: null,
     subtasks: task.subtasks.map((subtask) => ({ ...subtask, id: uid('subtask'), done: false, completedAt: null, createdAt: Date.now() }))
   });
   tasks.push(duplicate);
@@ -846,8 +1057,109 @@ taskList.addEventListener('click', (event) => {
     persist(next ? `Completed · next ${recurrenceLabel(task.recurrence).toLowerCase()} task created` : targetReached ? `${target.title}: weekly target reached` : task.done ? 'Nicely done' : 'Task reopened');
     render();
   } else if (actionButton.dataset.action === 'edit') openEditor(task);
+  else if (actionButton.dataset.action === 'focus') startFocus(task);
+  else if (actionButton.dataset.action === 'recover') openRecovery(task);
   else if (actionButton.dataset.action === 'duplicate') duplicateTask(task);
   else if (actionButton.dataset.action === 'delete') softDeleteTasks(new Set([task.id]));
+});
+
+todayCommand.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-today-action]');
+  if (!button) return;
+  const action = button.dataset.todayAction;
+  if (action === 'overdue') return setView('overdue');
+  const row = button.closest('[data-task-id]');
+  const task = tasks.find((item) => item.id === row?.dataset.taskId);
+  if (!task) return;
+  if (action === 'focus') startFocus(task);
+  if (action === 'edit') openEditor(task);
+  if (action === 'recover') openRecovery(task);
+});
+
+$('focusPause').addEventListener('click', toggleFocusPause);
+$('focusEnd').addEventListener('click', () => finishFocusSession(false));
+$('focusComplete').addEventListener('click', () => finishFocusSession(true));
+$('focusClose').addEventListener('click', () => focusDialog.close());
+focusDialog.addEventListener('close', () => {
+  clearInterval(focusTimerInterval);
+  clearTimeout(focusNoteTimer);
+  const task = tasks.find((item) => item.id === focusTaskId);
+  if (task) persist();
+  focusTimerInterval = null;
+  focusTaskId = null;
+});
+$('focusSubtasks').addEventListener('change', (event) => {
+  const checkbox = event.target.closest('input[type="checkbox"]');
+  const row = checkbox?.closest('[data-subtask-id]');
+  const task = tasks.find((item) => item.id === focusTaskId);
+  const subtask = task?.subtasks.find((item) => item.id === row?.dataset.subtaskId);
+  if (!subtask) return;
+  subtask.done = checkbox.checked;
+  subtask.completedAt = checkbox.checked ? Date.now() : null;
+  touch(task);
+  persist();
+  renderFocusDialog(task);
+  renderTodayCommand();
+});
+$('focusSubtasks').addEventListener('click', (event) => {
+  if (!event.target.closest('[data-focus-action="add-subtasks"]')) return;
+  const task = tasks.find((item) => item.id === focusTaskId);
+  if (task?.activeSession?.running) {
+    task.activeSession.accumulatedSeconds = sessionElapsed(task);
+    task.activeSession.lastResumedAt = null;
+    task.activeSession.running = false;
+    touch(task);
+  }
+  focusDialog.close();
+  openEditor(task);
+  setTimeout(() => $('subtaskInput').focus(), 60);
+});
+$('focusNotes').addEventListener('input', () => {
+  const task = tasks.find((item) => item.id === focusTaskId);
+  if (!task) return;
+  task.focusNotes = $('focusNotes').value.slice(0, 4000);
+  touch(task);
+  $('focusNotesStatus').textContent = 'Saving…';
+  clearTimeout(focusNoteTimer);
+  focusNoteTimer = setTimeout(async () => { await persist(); $('focusNotesStatus').textContent = 'Saved with this task'; }, 500);
+});
+
+$('recoveryClose').addEventListener('click', () => recoveryDialog.close());
+recoveryDialog.addEventListener('close', () => { recoveryTaskId = null; });
+recoveryDialog.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-recovery-action]');
+  if (!button) return;
+  const task = tasks.find((item) => item.id === recoveryTaskId);
+  if (!task) return recoveryDialog.close();
+  const action = button.dataset.recoveryAction;
+  if (action === 'tomorrow') {
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+    task.date = localDateKey(tomorrow); task.reminderAt = null;
+    return completeRecovery(task, 'Moved to tomorrow');
+  }
+  if (action === 'date') {
+    const date = $('recoveryDate').value;
+    if (!validDateKey(date)) return showToast('Choose a valid date');
+    task.date = date; task.reminderAt = null;
+    return completeRecovery(task, `Moved to ${formatDay(date, { month: 'short', day: 'numeric' })}`);
+  }
+  if (action === 'priority') {
+    task.priority = $('recoveryPriority').value;
+    return completeRecovery(task, 'Priority updated');
+  }
+  if (action === 'backlog') {
+    task.date = null; task.dueTime = null; task.reminderAt = null;
+    return completeRecovery(task, 'Moved to Inbox backlog');
+  }
+  if (action === 'subtasks') {
+    recoveryDialog.close();
+    openEditor(task);
+    return setTimeout(() => $('subtaskInput').focus(), 60);
+  }
+  if (action === 'delete') {
+    recoveryDialog.close();
+    softDeleteTasks(new Set([task.id]));
+  }
 });
 
 taskList.addEventListener('change', (event) => {

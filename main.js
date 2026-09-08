@@ -73,6 +73,26 @@ function normalizeTask(task) {
       completedAt: subtask.completedAt && Number.isFinite(Number(subtask.completedAt)) ? Number(subtask.completedAt) : null
     };
   }).filter(Boolean) : [];
+  const focusSessions = Array.isArray(task.focusSessions) ? task.focusSessions.slice(-200).map((session) => {
+    if (!session || typeof session !== 'object') return null;
+    const startedAt = Number(session.startedAt);
+    const endedAt = Number(session.endedAt);
+    return {
+      id: String(session.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`).slice(0, 120),
+      startedAt: Number.isFinite(startedAt) ? startedAt : createdAt,
+      endedAt: Number.isFinite(endedAt) ? endedAt : null,
+      durationSeconds: Math.max(0, Math.min(86400, Math.round(Number(session.durationSeconds) || 0))),
+      completed: Boolean(session.completed)
+    };
+  }).filter(Boolean) : [];
+  const rawActiveSession = task.activeSession && typeof task.activeSession === 'object' ? task.activeSession : null;
+  const activeSession = rawActiveSession ? {
+    id: String(rawActiveSession.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`).slice(0, 120),
+    startedAt: Number.isFinite(Number(rawActiveSession.startedAt)) ? Number(rawActiveSession.startedAt) : Date.now(),
+    accumulatedSeconds: Math.max(0, Math.min(86400, Number(rawActiveSession.accumulatedSeconds) || 0)),
+    lastResumedAt: Number.isFinite(Number(rawActiveSession.lastResumedAt)) ? Number(rawActiveSession.lastResumedAt) : null,
+    running: Boolean(rawActiveSession.running)
+  } : null;
   return {
     id: String(task.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
     title,
@@ -94,7 +114,11 @@ function normalizeTask(task) {
     updatedAt: Number.isFinite(Number(task.updatedAt)) ? Number(task.updatedAt) : (completedAt || createdAt),
     order: Number.isFinite(Number(task.order)) ? Number(task.order) : createdAt,
     seriesId: task.seriesId ? String(task.seriesId).slice(0, 120) : null,
-    weeklyTargetId: task.weeklyTargetId ? String(task.weeklyTargetId).slice(0, 120) : null
+    weeklyTargetId: task.weeklyTargetId ? String(task.weeklyTargetId).slice(0, 120) : null,
+    actualSeconds: Math.max(0, Math.min(31536000, Math.round(Number(task.actualSeconds) || 0))),
+    focusNotes: String(task.focusNotes || '').slice(0, 4000),
+    focusSessions,
+    activeSession
   };
 }
 
