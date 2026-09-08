@@ -5,7 +5,7 @@ TaskNest is a private Windows daily planner with a separate, resizable desktop w
 ## Install
 
 1. Open the `dist` folder.
-2. Run `TaskNest-Setup-2.1.0.exe`.
+2. Run `TaskNest-Setup-2.1.1.exe`.
 3. Choose an install location. The installer creates a desktop shortcut.
 
 ## Use

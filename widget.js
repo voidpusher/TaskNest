@@ -1,3 +1,20 @@
+if (!window.tasknest) {
+  const taskKey = 'tasknest-browser-tasks';
+  const settingsKey = 'tasknest-browser-settings';
+  const read = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
+  const write = (key, value) => localStorage.setItem(key, JSON.stringify(value));
+  window.tasknest = {
+    loadTasks: async () => read(taskKey, []),
+    saveTasks: async (items) => { write(taskKey, items); return true; },
+    loadSettings: async () => read(settingsKey, { widgetPinned: true, widgetView: 'today', timeTarget: null }),
+    saveSettings: async (update) => { const settings = { ...read(settingsKey, {}), ...update }; write(settingsKey, settings); return settings; },
+    toggleWidgetPin: async () => { const current = read(settingsKey, {}); const settings = { ...current, widgetPinned: !current.widgetPinned }; write(settingsKey, settings); return settings; },
+    openMain: () => { window.location.href = 'index.html'; },
+    minimizeWidget: () => {}, closeWidget: () => window.close(), removeWidget: () => {}, cancelVoice: () => {},
+    onTasksChanged: () => {}, onWidgetSettings: () => {}
+  };
+}
+
 const widgetList = document.getElementById('widgetList');
 const emptyState = document.getElementById('emptyState');
 const quickInput = document.getElementById('quickInput');
@@ -18,6 +35,8 @@ let voiceHadResult = false;
 let silenceVoiceEnd = false;
 let nativeVoiceActive = false;
 let nativeVoiceCancelled = false;
+let settings = { widgetPinned: true, widgetView: 'today', timeTarget: null };
+let widgetMode = 'today';
 
 function normalizeTask(task) {
   const createdAt = Number(task.createdAt) || Date.now();
@@ -39,7 +58,8 @@ function normalizeTask(task) {
     order: Number.isFinite(Number(task.order)) ? Number(task.order) : createdAt,
     archived: Boolean(task.archived),
     deletedAt: Number(task.deletedAt) || null,
-    seriesId: task.seriesId || null
+    seriesId: task.seriesId || null,
+    timeTargetId: task.timeTargetId || null
   };
 }
 
@@ -99,6 +119,7 @@ function createNextOccurrence(task) {
     order: nextTaskOrder(),
     reminderAt: null,
     seriesId,
+    timeTargetId: null,
     subtasks: task.subtasks.map((item) => ({ ...item, id: `${now}-${Math.random().toString(16).slice(2)}`, done: false, completedAt: null, createdAt: now }))
   }));
 }
@@ -245,23 +266,45 @@ async function persist(message, action = null) {
 }
 
 function render() {
-  const todayTasks = tasks
-    .filter((task) => task.date === today && !task.archived)
+  const target = settings.timeTarget;
+  if (widgetMode === 'timeTarget' && !target) widgetMode = 'today';
+  const visibleTasks = tasks
+    .filter((task) => !task.archived && (widgetMode === 'timeTarget' ? task.timeTargetId === target?.id : task.date === today))
     .sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
-  const complete = todayTasks.filter((task) => task.done).length;
-  const percent = todayTasks.length ? Math.round(complete / todayTasks.length * 100) : 0;
-  document.getElementById('dateLabel').textContent = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase();
+  const complete = visibleTasks.filter((task) => task.done).length;
+  const percent = visibleTasks.length ? Math.round(complete / visibleTasks.length * 100) : 0;
+  document.querySelectorAll('[data-widget-mode]').forEach((button) => button.classList.toggle('active', button.dataset.widgetMode === widgetMode));
+  document.querySelector('[data-widget-mode="timeTarget"]').disabled = !target;
+  document.getElementById('dateLabel').textContent = widgetMode === 'timeTarget' ? 'ACTIVE TIME TARGET' : new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase();
+  document.getElementById('widgetHeading').textContent = widgetMode === 'timeTarget' ? target.label : 'Today’s focus';
   document.getElementById('scoreValue').textContent = `${percent}%`;
   document.getElementById('progressBar').style.width = `${percent}%`;
-  document.getElementById('remainingLabel').textContent = todayTasks.length - complete ? `${todayTasks.length - complete} still open` : todayTasks.length ? 'Everything complete' : 'Nothing pending';
-  emptyState.classList.toggle('hidden', todayTasks.length !== 0);
-  widgetList.classList.toggle('hidden', todayTasks.length === 0);
-  widgetList.innerHTML = todayTasks.map((task) => `<article class="widget-task ${task.done ? 'done' : ''}" data-id="${task.id}">
+  document.getElementById('remainingLabel').textContent = visibleTasks.length - complete ? `${visibleTasks.length - complete} still open` : visibleTasks.length ? 'Everything complete' : 'Nothing pending';
+  quickInput.placeholder = widgetMode === 'timeTarget' ? 'Add to this time target…' : 'Add today’s task…';
+  quickInput.setAttribute('aria-label', widgetMode === 'timeTarget' ? 'Add a task to this time target' : 'Add today’s task');
+  document.getElementById('targetSummary').classList.toggle('hidden', widgetMode !== 'timeTarget');
+  document.getElementById('emptyTitle').textContent = widgetMode === 'timeTarget' ? 'This block is empty' : 'Nothing here yet';
+  document.getElementById('emptyCopy').textContent = widgetMode === 'timeTarget' ? 'Add the first to-do for this time period.' : 'Add today’s first task above.';
+  emptyState.classList.toggle('hidden', visibleTasks.length !== 0);
+  widgetList.classList.toggle('hidden', visibleTasks.length === 0);
+  widgetList.innerHTML = visibleTasks.map((task) => `<article class="widget-task ${task.done ? 'done' : ''}" data-id="${task.id}">
     <button class="check" data-action="toggle" aria-label="${task.done ? 'Reopen' : 'Complete'} task"><svg viewBox="0 0 24 24"><path d="m6 12 4 4 8-9"/></svg></button>
     <button class="task-title" data-action="edit" title="Click to edit">${escapeHtml(task.title)}</button>
     <button class="edit" data-action="edit" aria-label="Edit task" title="Edit task"><svg viewBox="0 0 24 24"><path d="m4 16-.8 4 4-.8L18 8.4 14.6 5 4 16Z"/></svg></button>
     <button class="delete" data-action="delete" aria-label="Delete task" title="Delete task"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></button>
   </article>`).join('');
+  renderTargetClock();
+}
+
+function renderTargetClock() {
+  if (widgetMode !== 'timeTarget' || !settings.timeTarget) return;
+  const target = settings.timeTarget;
+  const seconds = Math.max(0, Math.ceil((target.endsAt - Date.now()) / 1000));
+  const hours = String(Math.floor(seconds / 3600)).padStart(2, '0');
+  const minutes = String(Math.floor(seconds % 3600 / 60)).padStart(2, '0');
+  const remainder = String(seconds % 60).padStart(2, '0');
+  document.getElementById('targetCountdown').textContent = seconds ? `${hours}:${minutes}:${remainder}` : 'Complete';
+  document.getElementById('targetEnds').textContent = `${seconds ? 'Ends' : 'Finished'} at ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(target.endsAt))}`;
 }
 
 function beginInlineEdit(item, index) {
@@ -319,7 +362,8 @@ document.getElementById('quickForm').addEventListener('submit', (event) => {
     createdAt: now,
     completedAt: null,
     updatedAt: now,
-    order: nextTaskOrder()
+    order: nextTaskOrder(),
+    timeTargetId: widgetMode === 'timeTarget' ? settings.timeTarget?.id || null : null
   }));
   quickInput.value = '';
   persist('Task saved');
@@ -328,6 +372,14 @@ document.getElementById('quickForm').addEventListener('submit', (event) => {
 });
 
 widgetVoiceButton.addEventListener('click', toggleVoiceInput);
+document.querySelector('.widget-mode-switch').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-widget-mode]');
+  if (!button || button.disabled) return;
+  widgetMode = button.dataset.widgetMode;
+  settings = await window.tasknest.saveSettings({ widgetView: widgetMode });
+  render();
+  quickInput.focus();
+});
 
 widgetList.addEventListener('click', (event) => {
   const button = event.target.closest('[data-action]');
@@ -368,9 +420,12 @@ document.getElementById('minimizeButton').addEventListener('click', () => window
 document.getElementById('closeButton').addEventListener('click', () => window.tasknest.closeWidget());
 document.getElementById('removeWidget').addEventListener('click', () => window.tasknest.removeWidget());
 
-function applySettings(settings) {
+function applySettings(nextSettings) {
+  settings = { ...settings, ...nextSettings };
+  widgetMode = settings.widgetView === 'timeTarget' && settings.timeTarget ? 'timeTarget' : 'today';
   pinButton.classList.toggle('unpinned', !settings.widgetPinned);
   pinButton.title = settings.widgetPinned ? 'Stop keeping above other windows' : 'Keep above other windows';
+  render();
 }
 
 window.tasknest.onTasksChanged(async () => {
@@ -398,7 +453,6 @@ setInterval(async () => {
 async function init() {
   tasks = prepareTasks(await window.tasknest.loadTasks());
   applySettings(await window.tasknest.loadSettings());
-  render();
   setTimeout(() => quickInput.focus(), 200);
 }
 

@@ -1076,6 +1076,7 @@ function renderTimeTarget() {
   $('timeTargetSetup').classList.toggle('hidden', active);
   $('timeTargetLive').classList.toggle('hidden', !active);
   $('clearTimeTarget').classList.toggle('hidden', !active);
+  $('timeTargetWidgetButton').classList.toggle('hidden', !active);
   if (!active) {
     $('timeTargetTitle').textContent = 'Set a focused window';
     $('timeTargetTaskList').innerHTML = '';
@@ -1735,6 +1736,13 @@ $('startUntilTarget').addEventListener('click', () => {
   startTimeTarget(end.getTime(), `Until ${formatClockTime(end.getTime())}`);
 });
 $('clearTimeTarget').addEventListener('click', () => { timeTarget = null; saveTimeTarget('Time target cleared'); });
+$('timeTargetWidgetButton').addEventListener('click', async () => {
+  await window.tasknest.saveSettings({ timeTarget, widgetView: 'timeTarget' });
+  const settings = await window.tasknest.openWidget();
+  widgetEnabled = settings.widgetEnabled;
+  renderWidgetCard();
+  showToast('Time target widget opened');
+});
 $('timeTargetTaskForm').addEventListener('submit', (event) => {
   event.preventDefault();
   if (!timeTarget) return showToast('Start a time target first');

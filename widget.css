@@ -20,6 +20,16 @@ main { height:calc(100% - 44px); padding:20px 18px 11px; display:flex; flex-dire
 h1 { margin:0; font-family:Georgia,serif; font-size:clamp(22px,7vw,28px); font-weight:400; letter-spacing:-.04em; }
 .score { display:grid; text-align:right; }.score strong { font-family:Georgia,serif; font-size:19px; font-weight:400; }.score span { color:var(--muted); font-size:8px; letter-spacing:.1em; text-transform:uppercase; }
 .progress { height:4px; margin:15px 0 14px; border-radius:99px; overflow:hidden; background:rgba(255,255,255,.08); }.progress span { display:block; width:0; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--sage),#4d9eff,var(--yellow));box-shadow:0 0 12px rgba(102,217,255,.4); transition:width .35s ease; }
+.widget-mode-switch { margin:-2px 0 10px; padding:3px; border:1px solid var(--border); border-radius:10px; display:grid; grid-template-columns:1fr 1fr; gap:3px; background:rgba(18,21,18,.35); }
+.widget-mode-switch button { height:29px; border:0; border-radius:7px; color:var(--muted); background:transparent; font-size:10px; font-weight:600; cursor:pointer; transition:.18s ease; }
+.widget-mode-switch button:hover:not(:disabled) { color:var(--text); background:rgba(255,255,255,.06); }
+.widget-mode-switch button.active { color:#262014; background:linear-gradient(135deg,#f1d57d,#dda177); box-shadow:0 4px 15px rgba(10,12,10,.2); }
+.widget-mode-switch button:disabled { opacity:.35; cursor:not-allowed; }
+.target-summary { margin:0 0 10px; padding:11px 12px; border:1px solid rgba(232,201,104,.2); border-radius:10px; display:flex; align-items:end; justify-content:space-between; gap:12px; background:linear-gradient(135deg,rgba(70,65,40,.45),rgba(33,37,31,.58)); }
+.target-summary > div { display:grid; gap:2px; }
+.target-summary span { color:var(--yellow); font-size:8px; font-weight:700; letter-spacing:.13em; }
+.target-summary strong { color:var(--text); font-size:20px; font-weight:650; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
+.target-summary p { margin:0 0 3px; color:var(--muted); font-size:9px; }
 form { display:grid; grid-template-columns:1fr 38px; gap:7px; margin-bottom:10px; }
 form input { min-width:0; height:38px; padding:0 12px; border:1px solid var(--border); border-radius:9px; outline:none; background:rgba(4,32,56,.66); color:var(--text);box-shadow:inset 0 1px rgba(255,255,255,.03); user-select:text; }
 form input::placeholder { color:#6d7367; } form input:focus { border-color:rgba(170,189,140,.45); box-shadow:0 0 0 3px rgba(170,189,140,.07); }

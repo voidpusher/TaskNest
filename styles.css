@@ -1721,6 +1721,9 @@ button.recovery-choice:hover { border-color: #aabbb4; box-shadow: 0 8px 20px rgb
 .time-target-heading strong { overflow: hidden; color: var(--ink); font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .time-target-heading button { padding: 4px 6px; border: 0; border-radius: 5px; color: #78868c; background: transparent; font-size: 8px; cursor: pointer; }
 .time-target-heading button:hover { color: #d8322a; background: #f8e7e4; }
+.time-target-heading-actions { display: flex; align-items: center; gap: 2px; }
+.time-target-heading .time-target-widget-button { color: #0874d3; }
+.time-target-heading .time-target-widget-button:hover { color: #0067b9; background: #edf6fd; }
 .time-target-setup { display: grid; gap: 8px; }
 .time-preset-row { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 5px; }
 .time-preset-row button { height: 29px; border: 1px solid #cbd5d1; border-radius: 6px; color: #315466; background: #fff; font-size: 8px; font-weight: 650; cursor: pointer; }

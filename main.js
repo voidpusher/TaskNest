@@ -390,7 +390,7 @@ function recognizeVoice(language) {
 }
 
 function readSettings() {
-  const raw = { widgetEnabled: false, widgetPinned: true, widgetBounds: null, timeTarget: null, ...readJson(settingsFile(), {}) };
+  const raw = { widgetEnabled: false, widgetPinned: true, widgetBounds: null, widgetView: 'today', timeTarget: null, ...readJson(settingsFile(), {}) };
   const target = raw.timeTarget && typeof raw.timeTarget === 'object' && Number(raw.timeTarget.endsAt) > 0 ? {
     id: String(raw.timeTarget.id || `target-${Date.now()}`).slice(0, 120),
     label: String(raw.timeTarget.label || 'Focused window').slice(0, 80),
@@ -399,13 +399,18 @@ function readSettings() {
     durationSeconds: Math.max(60, Math.round(Number(raw.timeTarget.durationSeconds) || (Number(raw.timeTarget.endsAt) - Number(raw.timeTarget.startedAt)) / 1000)),
     notifiedAt: Number(raw.timeTarget.notifiedAt) || null
   } : null;
-  return { ...raw, timeTarget: target };
+  return { ...raw, widgetView: raw.widgetView === 'timeTarget' ? 'timeTarget' : 'today', timeTarget: target };
 }
 
 function saveSettings(update) {
   const next = { ...readSettings(), ...update };
   writeJson(settingsFile(), next);
   return next;
+}
+
+function broadcastWidgetSettings(settings) {
+  if (!app.isReady()) return;
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('widget:settings', settings);
 }
 
 function createMainWindow() {
@@ -529,6 +534,7 @@ ipcMain.handle('tasks:save', (_event, tasks) => {
 ipcMain.handle('settings:load', () => readSettings());
 ipcMain.handle('settings:save', (_event, update) => {
   const settings = saveSettings(update && typeof update === 'object' ? update : {});
+  broadcastWidgetSettings(settings);
   updateLoginBehavior();
   setImmediate(checkReminders);
   return settings;
