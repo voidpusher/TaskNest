@@ -228,8 +228,16 @@ function recognizeVoice(language) {
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.on('error', () => finish({ ok: false, error: 'unavailable' }));
     child.on('close', (code) => {
-      const text = stdout.trim().slice(0, 160);
-      if (code === 0 && text) return finish({ ok: true, text });
+      const raw = stdout.trim().replace(/^\uFEFF/, '');
+      if (code === 0 && raw) {
+        try {
+          const result = JSON.parse(raw);
+          const text = String(result.text || '').trim().slice(0, 160);
+          if (text) return finish({ ok: true, text, confidence: Number(result.confidence), culture: result.culture, alternatives: result.alternatives || [] });
+        } catch {
+          return finish({ ok: true, text: raw.slice(0, 160) });
+        }
+      }
       if (code === 3) return finish({ ok: false, error: 'no-speech' });
       finish({ ok: false, error: code === 2 ? 'language' : 'audio-capture' });
     });

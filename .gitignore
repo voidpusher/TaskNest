@@ -14,3 +14,8 @@ Cache/
 Code Cache/
 Crashpad/
 .runtime-profile*/
+
+.vercel
+.env*
+.vercel-profile/
+.npm-cache-vercel/

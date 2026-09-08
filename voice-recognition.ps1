@@ -16,11 +16,24 @@ try {
 
   $engine = [System.Speech.Recognition.SpeechRecognitionEngine]::new($recognizer)
   try {
+    $engine.InitialSilenceTimeout = [TimeSpan]::FromSeconds(5)
+    $engine.BabbleTimeout = [TimeSpan]::FromSeconds(3)
+    $engine.EndSilenceTimeout = [TimeSpan]::FromMilliseconds(900)
+    $engine.EndSilenceTimeoutAmbiguous = [TimeSpan]::FromMilliseconds(1400)
     $engine.LoadGrammar([System.Speech.Recognition.DictationGrammar]::new())
     $engine.SetInputToDefaultAudioDevice()
     $result = $engine.Recognize([TimeSpan]::FromSeconds($TimeoutSeconds))
     if (-not $result -or [string]::IsNullOrWhiteSpace($result.Text)) { exit 3 }
-    [Console]::Write($result.Text.Trim())
+    $alternatives = @($result.Alternates | Select-Object -First 3 | ForEach-Object {
+      [ordered]@{ text = $_.Text.Trim(); confidence = [Math]::Round($_.Confidence, 4) }
+    })
+    $payload = [ordered]@{
+      text = $result.Text.Trim()
+      confidence = [Math]::Round($result.Confidence, 4)
+      culture = $recognizer.Culture.Name
+      alternatives = $alternatives
+    }
+    [Console]::Write(($payload | ConvertTo-Json -Compress -Depth 4))
   }
   finally {
     $engine.Dispose()

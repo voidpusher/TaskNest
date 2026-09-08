@@ -1442,10 +1442,25 @@ h1 { color: var(--ink); font-size: clamp(32px, 3vw, 40px); font-weight: 650; }
 .voice-button.listening { border-color: rgba(255, 69, 58, .45); color: #d9362b; background: #fff2f0; }
 .voice-button.listening .voice-pulse { animation: voicePulse 1.25s ease-out infinite; }
 .task-form.voice-listening { border-color: rgba(255, 69, 58, .55); box-shadow: 0 0 0 2px rgba(255,69,58,.09); }
+.voice-assist { min-height: 29px; margin: 5px 2px 10px; display: flex; align-items: center; justify-content: space-between; gap: 14px; color: #78878d; font-size: 9px; }
+.voice-status { min-width: 0; display: flex; align-items: center; gap: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.voice-status i { width: 5px; height: 5px; border-radius: 50%; flex: 0 0 auto; background: #a7b1b5; box-shadow: 0 0 0 3px rgba(167,177,181,.12); }
+.voice-status[data-state="listening"] { color: #bd332c; }
+.voice-status[data-state="listening"] i { background: #ff453a; box-shadow: 0 0 0 4px rgba(255,69,58,.12); }
+.voice-status[data-state="captured"] { color: #347360; }
+.voice-status[data-state="captured"] i { background: #34a77b; box-shadow: 0 0 0 3px rgba(52,167,123,.12); }
+.voice-status[data-state="error"] { color: #bd332c; }
+.voice-language { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.voice-language select { height: 24px; max-width: 168px; padding: 0 24px 0 8px; border: 1px solid #dce3e0; border-radius: 6px; outline: none; color: #54666e; background: #f7f9f8; font: inherit; cursor: pointer; }
+.voice-language select:hover, .voice-language select:focus { border-color: #aebdb7; background: #fff; }
+.voice-language select:disabled { opacity: .55; cursor: default; }
 @keyframes voicePulse { 0% { opacity: .75; transform: scale(.55); } 75%, 100% { opacity: 0; transform: scale(1.25); } }
 
 @media (max-width: 700px) {
   .task-form { grid-template-columns: 20px minmax(0, 1fr) 36px auto; }
+  .voice-assist { align-items: flex-start; }
+  .voice-language { font-size: 0; }
+  .voice-language select { max-width: 132px; font-size: 9px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

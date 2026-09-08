@@ -53,6 +53,8 @@ const projectForm = $('projectForm');
 const projectGrid = $('projectGrid');
 const bulkBar = $('bulkBar');
 const voiceButton = $('voiceButton');
+const voiceStatus = $('voiceStatus');
+const voiceLanguage = $('voiceLanguage');
 
 let tasks = [];
 let weeklyTargets = [];
@@ -76,6 +78,13 @@ let voiceHadResult = false;
 let silenceVoiceEnd = false;
 let nativeVoiceActive = false;
 let nativeVoiceCancelled = false;
+let voiceFinalTranscript = '';
+let voiceInterimTranscript = '';
+let voiceStopRequested = false;
+let voiceTimeoutTimer = null;
+let voiceFinishTimer = null;
+
+const VOICE_LANGUAGE_KEY = 'tasknest-voice-language';
 
 const icon = {
   check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 12 4 4 8-9"/></svg>',
@@ -230,6 +239,51 @@ function showToast(message, action = null) {
   toastTimer = setTimeout(() => { toast.classList.remove('show'); undoAction = null; }, action ? 6000 : 1900);
 }
 
+function inferredVoiceLanguage() {
+  const browserLanguage = navigator.language || 'en-US';
+  if (browserLanguage.toLowerCase().startsWith('hi')) return 'hi-IN';
+  if (browserLanguage.toLowerCase() === 'en-in') return 'en-IN';
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (zone === 'Asia/Kolkata' || zone === 'Asia/Calcutta') return 'en-IN';
+  } catch {}
+  return browserLanguage;
+}
+
+function selectedVoiceLanguage() {
+  return voiceLanguage.value === 'auto' ? inferredVoiceLanguage() : voiceLanguage.value;
+}
+
+function voiceLanguageName(language = selectedVoiceLanguage()) {
+  const names = { 'en-IN': 'English / Hinglish', 'hi-IN': 'Hindi', 'en-US': 'English (US)', 'en-GB': 'English (UK)' };
+  return names[language] || language;
+}
+
+function setVoiceStatus(message, state = 'idle') {
+  voiceStatus.lastChild.textContent = message;
+  voiceStatus.dataset.state = state;
+}
+
+function cleanTranscript(value) {
+  return String(value || '').replace(/\s+/g, ' ').replace(/\s+([,.;!?])/g, '$1').trim();
+}
+
+function updateVoiceDraft() {
+  const spoken = cleanTranscript([voiceFinalTranscript, voiceInterimTranscript].filter(Boolean).join(' '));
+  if (!spoken) return;
+  voiceHadResult = true;
+  taskInput.value = `${voiceSeed}${voiceSeed ? ' ' : ''}${spoken}`.slice(0, taskInput.maxLength);
+  taskInput.dispatchEvent(new Event('input', { bubbles: true }));
+  setVoiceStatus(`Hearing: ${spoken}`, 'listening');
+}
+
+function clearVoiceTimers() {
+  clearTimeout(voiceTimeoutTimer);
+  clearTimeout(voiceFinishTimer);
+  voiceTimeoutTimer = null;
+  voiceFinishTimer = null;
+}
+
 function setVoiceListening(listening) {
   voiceListening = listening;
   voiceButton.classList.toggle('listening', listening);
@@ -237,6 +291,8 @@ function setVoiceListening(listening) {
   voiceButton.setAttribute('aria-label', listening ? 'Stop listening' : 'Add task with your voice');
   voiceButton.title = listening ? 'Listening… click to stop' : 'Speak a task';
   taskForm.classList.toggle('voice-listening', listening);
+  if (listening) setVoiceStatus(`Listening in ${voiceLanguageName()}…`, 'listening');
+  voiceLanguage.disabled = listening;
 }
 
 function speechErrorMessage(error) {
@@ -251,6 +307,8 @@ function speechErrorMessage(error) {
 
 function stopVoiceInput(silent = false) {
   silenceVoiceEnd = silent;
+  voiceStopRequested = true;
+  clearVoiceTimers();
   if (nativeVoiceActive) {
     nativeVoiceCancelled = true;
     window.tasknest.cancelVoice?.();
@@ -263,28 +321,37 @@ function stopVoiceInput(silent = false) {
 async function toggleVoiceInput() {
   if (voiceListening) return stopVoiceInput();
 
+  voiceSeed = taskInput.value.trim();
+  voiceHadResult = false;
+  silenceVoiceEnd = false;
+  voiceStopRequested = false;
+  voiceFinalTranscript = '';
+  voiceInterimTranscript = '';
+  clearVoiceTimers();
+  const language = selectedVoiceLanguage();
+
   if (typeof window.tasknest.recognizeVoice === 'function') {
-    voiceSeed = taskInput.value.trim();
-    voiceHadResult = false;
-    silenceVoiceEnd = false;
     nativeVoiceActive = true;
     nativeVoiceCancelled = false;
     setVoiceListening(true);
-    const result = await window.tasknest.recognizeVoice(navigator.language || 'en-US');
+    const result = await window.tasknest.recognizeVoice(language);
     const cancelled = nativeVoiceCancelled;
     nativeVoiceActive = false;
     setVoiceListening(false);
+    voiceLanguage.disabled = false;
     taskInput.focus();
     if (cancelled) {
       if (!silenceVoiceEnd) showToast('Listening stopped');
       return;
     }
     if (!result?.ok) return showToast(speechErrorMessage(result?.error));
-    const spoken = String(result.text || '').trim();
+    const spoken = cleanTranscript(result.text);
     if (!spoken) return showToast('I didn’t hear anything — try again');
     voiceHadResult = true;
     taskInput.value = `${voiceSeed}${voiceSeed ? ' ' : ''}${spoken}`.slice(0, taskInput.maxLength);
     taskInput.dispatchEvent(new Event('input', { bubbles: true }));
+    const confidence = Number(result.confidence);
+    setVoiceStatus(Number.isFinite(confidence) ? `Captured · ${Math.round(confidence * 100)}% confidence` : 'Captured — review before adding', 'captured');
     showToast('Voice captured — review it, then press Add');
     return;
   }
@@ -300,28 +367,50 @@ async function toggleVoiceInput() {
   voiceHadResult = false;
   silenceVoiceEnd = false;
   voiceRecognition = new SpeechRecognitionApi();
-  voiceRecognition.lang = navigator.language || 'en-US';
-  voiceRecognition.continuous = false;
+  voiceRecognition.lang = language;
+  voiceRecognition.continuous = true;
   voiceRecognition.interimResults = true;
-  voiceRecognition.maxAlternatives = 1;
-  voiceRecognition.onstart = () => setVoiceListening(true);
+  voiceRecognition.maxAlternatives = 3;
+  voiceRecognition.onstart = () => {
+    setVoiceListening(true);
+    voiceTimeoutTimer = setTimeout(() => stopVoiceInput(), 15000);
+  };
   voiceRecognition.onresult = (event) => {
-    const spoken = Array.from(event.results).map((result) => result[0]?.transcript || '').join(' ').trim();
-    if (!spoken) return;
-    voiceHadResult = true;
-    taskInput.value = `${voiceSeed}${voiceSeed ? ' ' : ''}${spoken}`.slice(0, taskInput.maxLength);
-    taskInput.dispatchEvent(new Event('input', { bubbles: true }));
+    const finals = [];
+    const interim = [];
+    for (const result of Array.from(event.results)) {
+      const alternatives = Array.from(result);
+      const best = alternatives.reduce((winner, option) => Number(option.confidence || 0) > Number(winner?.confidence || 0) ? option : winner, alternatives[0]);
+      const transcript = cleanTranscript(best?.transcript);
+      if (!transcript) continue;
+      (result.isFinal ? finals : interim).push(transcript);
+    }
+    voiceFinalTranscript = cleanTranscript(finals.join(' '));
+    voiceInterimTranscript = cleanTranscript(interim.join(' '));
+    updateVoiceDraft();
+    if (voiceFinalTranscript) {
+      clearTimeout(voiceFinishTimer);
+      voiceFinishTimer = setTimeout(() => stopVoiceInput(), 1800);
+    }
   };
   voiceRecognition.onerror = (event) => {
     if (event.error === 'aborted') return;
     silenceVoiceEnd = true;
+    voiceStopRequested = true;
+    clearVoiceTimers();
     showToast(speechErrorMessage(event.error));
+    setVoiceStatus(speechErrorMessage(event.error), 'error');
   };
   voiceRecognition.onend = () => {
+    clearVoiceTimers();
     setVoiceListening(false);
+    voiceLanguage.disabled = false;
     voiceRecognition = null;
     taskInput.focus();
-    if (!silenceVoiceEnd) showToast(voiceHadResult ? 'Voice captured — review it, then press Add' : 'Listening stopped');
+    if (!silenceVoiceEnd) {
+      setVoiceStatus(voiceHadResult ? 'Captured — review before adding' : 'No speech captured — try closer to the mic', voiceHadResult ? 'captured' : 'idle');
+      showToast(voiceHadResult ? 'Voice captured — review it, then press Add' : 'I didn’t hear anything — try again');
+    }
   };
 
   try {
@@ -738,6 +827,10 @@ function softDeleteTasks(taskIds, message = 'Task deleted') {
 
 taskForm.addEventListener('submit', (event) => { event.preventDefault(); stopVoiceInput(true); addQuickTask(taskInput.value, priorityInput.value); taskInput.value = ''; });
 voiceButton.addEventListener('click', toggleVoiceInput);
+voiceLanguage.addEventListener('change', () => {
+  localStorage.setItem(VOICE_LANGUAGE_KEY, voiceLanguage.value);
+  setVoiceStatus(`Ready for ${voiceLanguageName()}`, 'idle');
+});
 $('newTaskButton').addEventListener('click', () => openEditor());
 
 taskList.addEventListener('click', (event) => {
@@ -933,6 +1026,9 @@ window.tasknest.onProjectsChanged(async () => { projects = await window.tasknest
 window.tasknest.onWidgetSettings((settings) => { widgetEnabled = settings.widgetEnabled; renderWidgetCard(); });
 
 async function init() {
+  const savedVoiceLanguage = localStorage.getItem(VOICE_LANGUAGE_KEY);
+  if ([...voiceLanguage.options].some((option) => option.value === savedVoiceLanguage)) voiceLanguage.value = savedVoiceLanguage;
+  setVoiceStatus(`Ready for ${voiceLanguageName()}`, 'idle');
   const [savedTasks, savedTargets, savedProjects, settings] = await Promise.all([
     window.tasknest.loadTasks(), window.tasknest.loadWeeklyTargets(), window.tasknest.loadProjects(), window.tasknest.loadSettings()
   ]);
