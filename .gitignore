@@ -19,3 +19,4 @@ Crashpad/
 .env*
 .vercel-profile/
 .npm-cache-vercel/
+.npm-cache/
