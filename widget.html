@@ -29,7 +29,7 @@
     <div class="progress"><span id="progressBar"></span></div>
 
     <nav class="widget-mode-switch" aria-label="Widget view"><button class="active" data-widget-mode="today" type="button">Today</button><button data-widget-mode="timeTarget" type="button">Time target</button></nav>
-    <section class="target-summary hidden" id="targetSummary" aria-label="Active time target"><div><span>TIME LEFT</span><strong id="targetCountdown">03:00:00</strong></div><p id="targetEnds">Ends at 2:00 PM</p></section>
+    <section class="target-summary hidden" id="targetSummary" aria-label="Active time target"><div><span>TIME LEFT</span><strong id="targetCountdown">03:00:00</strong></div><div class="target-summary-actions"><p id="targetEnds">Ends at 2:00 PM</p><button id="widgetResetTarget" type="button">Reset time</button></div></section>
 
     <form id="quickForm">
       <input id="quickInput" maxlength="160" autocomplete="off" placeholder="Add today’s task…" aria-label="Add today's task">
@@ -43,6 +43,6 @@
     <footer><span id="remainingLabel">Nothing pending</span><button id="removeWidget">Remove from desktop</button></footer>
   </main>
   <div class="toast" id="toast"><span id="toastText">Saved</span><button id="toastUndo" class="hidden">Undo</button></div>
-  <script src="widget.js?v=2.1.1"></script>
+  <script src="widget.js?v=2.1.2"></script>
 </body>
 </html>

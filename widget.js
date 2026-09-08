@@ -307,6 +307,17 @@ function renderTargetClock() {
   document.getElementById('targetEnds').textContent = `${seconds ? 'Ends' : 'Finished'} at ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(target.endsAt))}`;
 }
 
+async function resetTargetClock() {
+  const target = settings.timeTarget;
+  if (!target) return;
+  const now = Date.now();
+  const durationSeconds = Math.max(60, Math.round(Number(target.durationSeconds) || 60));
+  const timeTarget = { ...target, startedAt: now, endsAt: now + durationSeconds * 1000, durationSeconds, notifiedAt: null };
+  settings = await window.tasknest.saveSettings({ timeTarget, widgetView: 'timeTarget' });
+  render();
+  showToast('Time target restarted');
+}
+
 function beginInlineEdit(item, index) {
   const oldTitle = tasks[index].title;
   const titleButton = item.querySelector('.task-title');
@@ -372,6 +383,7 @@ document.getElementById('quickForm').addEventListener('submit', (event) => {
 });
 
 widgetVoiceButton.addEventListener('click', toggleVoiceInput);
+document.getElementById('widgetResetTarget').addEventListener('click', resetTargetClock);
 document.querySelector('.widget-mode-switch').addEventListener('click', async (event) => {
   const button = event.target.closest('[data-widget-mode]');
   if (!button || button.disabled) return;

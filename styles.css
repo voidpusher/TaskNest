@@ -1724,6 +1724,8 @@ button.recovery-choice:hover { border-color: #aabbb4; box-shadow: 0 8px 20px rgb
 .time-target-heading-actions { display: flex; align-items: center; gap: 2px; }
 .time-target-heading .time-target-widget-button { color: #0874d3; }
 .time-target-heading .time-target-widget-button:hover { color: #0067b9; background: #edf6fd; }
+.time-target-heading .time-target-reset-button { color: #a06b18; }
+.time-target-heading .time-target-reset-button:hover { color: #80520e; background: #fbf2df; }
 .time-target-setup { display: grid; gap: 8px; }
 .time-preset-row { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 5px; }
 .time-preset-row button { height: 29px; border: 1px solid #cbd5d1; border-radius: 6px; color: #315466; background: #fff; font-size: 8px; font-weight: 650; cursor: pointer; }

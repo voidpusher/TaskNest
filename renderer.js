@@ -1076,6 +1076,7 @@ function renderTimeTarget() {
   $('timeTargetSetup').classList.toggle('hidden', active);
   $('timeTargetLive').classList.toggle('hidden', !active);
   $('clearTimeTarget').classList.toggle('hidden', !active);
+  $('resetTimeTarget').classList.toggle('hidden', !active);
   $('timeTargetWidgetButton').classList.toggle('hidden', !active);
   if (!active) {
     $('timeTargetTitle').textContent = 'Set a focused window';
@@ -1121,6 +1122,14 @@ function startTimeTarget(endsAt, label) {
   if (!Number.isFinite(endsAt) || endsAt <= now) return showToast('Choose a time later than now');
   timeTarget = { id: uid('time-target'), label, startedAt: now, endsAt, durationSeconds: Math.max(60, Math.round((endsAt - now) / 1000)), notifiedAt: null };
   saveTimeTarget(`${label} started`);
+}
+
+function resetTimeTargetClock() {
+  if (!timeTarget) return;
+  const now = Date.now();
+  const durationSeconds = Math.max(60, Math.round(Number(timeTarget.durationSeconds) || 60));
+  timeTarget = { ...timeTarget, startedAt: now, endsAt: now + durationSeconds * 1000, durationSeconds, notifiedAt: null };
+  saveTimeTarget('Time target restarted');
 }
 
 async function showBrowserNotification(task, reminder, at) {
@@ -1736,6 +1745,7 @@ $('startUntilTarget').addEventListener('click', () => {
   startTimeTarget(end.getTime(), `Until ${formatClockTime(end.getTime())}`);
 });
 $('clearTimeTarget').addEventListener('click', () => { timeTarget = null; saveTimeTarget('Time target cleared'); });
+$('resetTimeTarget').addEventListener('click', resetTimeTargetClock);
 $('timeTargetWidgetButton').addEventListener('click', async () => {
   await window.tasknest.saveSettings({ timeTarget, widgetView: 'timeTarget' });
   const settings = await window.tasknest.openWidget();
