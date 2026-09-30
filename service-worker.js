@@ -1,5 +1,5 @@
-const CACHE_NAME = 'tasknest-v2.2.0';
-const APP_SHELL = ['/', '/index.html', '/styles.css?v=2.2.0', '/creative.css?v=2.2.0', '/renderer.js?v=2.2.0', '/assets/mountain-prayer-flags.png', '/assets/tasknest-icon.svg'];
+const CACHE_NAME = 'tasknest-v2.3.0';
+const APP_SHELL = ['/', '/index.html', '/styles.css?v=2.3.0', '/creative.css?v=2.3.0', '/revamp.css?v=2.3.0', '/renderer.js?v=2.3.0', '/assets/mountain-prayer-flags.png', '/assets/tasknest-icon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));

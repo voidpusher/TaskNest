@@ -637,6 +637,7 @@ function setView(view) {
   activeFilter = view === 'completed' ? 'done' : 'all';
   selectionMode = false;
   selectedTaskIds.clear();
+  setToolsOpen(false);
   render();
   if (previousView !== view && view === 'content') $('contentPage').scrollTop = 0;
 }
@@ -648,7 +649,15 @@ function chooseDate(key) {
   activeFilter = 'all';
   selectionMode = false;
   selectedTaskIds.clear();
+  setToolsOpen(false);
   render();
+}
+
+function setToolsOpen(open) {
+  document.body.classList.toggle('tools-open', open);
+  $('titleToolsButton').setAttribute('aria-expanded', String(open));
+  $('plannerTools').setAttribute('aria-hidden', String(!open));
+  $('plannerTools').inert = !open;
 }
 
 function setFilter(filter) {
@@ -822,6 +831,7 @@ function commitFocusSession(task, completed = false) {
 function renderTodayCommand() {
   const isToday = activeView === 'today';
   todayCommand.classList.toggle('hidden', !isToday);
+  $('planningPanel').classList.toggle('hidden', !isToday);
   if (!isToday) return;
   const today = localDateKey(new Date());
   const todayTasks = activeTasks().filter((task) => task.date === today);
@@ -840,6 +850,7 @@ function renderTodayCommand() {
   $('todayOverdueCount').textContent = overdue.length;
   $('todayProgress').textContent = `${percentage}%`;
   $('todayProgressNote').textContent = percentage === 100 ? 'Day complete' : completed ? `${completed} finished` : 'Start with one win';
+  $('planningSummary').textContent = `${openToday.length} left · ${overdue.length} overdue · ${estimatedMinutes ? formatCompactDuration(estimatedMinutes * 60) : 'No time estimated'}`;
   $('topPriorityCount').textContent = `${priorities.length} selected`;
 
   $('topPriorityList').innerHTML = priorities.length ? priorities.map((task, index) => `
@@ -975,6 +986,7 @@ function renderTaskList() {
   else if (activeView === 'overdue') { heading.textContent = 'Nothing overdue'; copy.textContent = 'You are clear—keep it that way.'; }
   else if (activeView === 'completed') { heading.textContent = 'No completed tasks'; copy.textContent = 'Finished work will collect here.'; }
   else if (activeView === 'inbox') { heading.textContent = 'Inbox cleared'; copy.textContent = 'Unscheduled tasks will appear here.'; }
+  else if (activeView === 'today') { heading.textContent = 'A fresh page. Your move.'; copy.textContent = 'Add one thing above, however small.'; }
   else { heading.textContent = 'No tasks here'; copy.textContent = 'Add one small thing or choose another view.'; }
 }
 
@@ -1937,7 +1949,13 @@ $('reminderDoneButton').addEventListener('click', () => {
 
 toastUndo.addEventListener('click', () => { if (!undoAction) return; const action = undoAction; undoAction = null; clearTimeout(toastTimer); toast.classList.remove('show'); action(); });
 
+setToolsOpen(false);
+$('titleToolsButton').addEventListener('click', () => setToolsOpen(!document.body.classList.contains('tools-open')));
+$('closeToolsButton').addEventListener('click', () => setToolsOpen(false));
+$('toolsBackdrop').addEventListener('click', () => setToolsOpen(false));
+
 document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && document.body.classList.contains('tools-open')) { setToolsOpen(false); return; }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); taskInput.focus(); taskInput.select(); }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 't') { event.preventDefault(); setView('today'); }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') { event.preventDefault(); searchInput.focus(); searchInput.select(); }

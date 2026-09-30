@@ -434,9 +434,9 @@ function createMainWindow() {
     height: 780,
     minWidth: 760,
     minHeight: 560,
-    backgroundColor: '#171815',
+    backgroundColor: '#fffdfa',
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#171815', symbolColor: '#fff8e9', height: 48 },
+    titleBarOverlay: { color: '#fffdfa', symbolColor: '#41394c', height: 56 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

@@ -1,6 +1,6 @@
 {
   "name": "tasknest",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "A calm desktop to-do list with a resizable widget mode.",
   "main": "main.js",
   "author": "TaskNest",
@@ -27,6 +27,7 @@
       "index.html",
       "styles.css",
       "creative.css",
+      "revamp.css",
       "renderer.js",
       "widget.html",
       "widget.css",

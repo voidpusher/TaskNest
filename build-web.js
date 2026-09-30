@@ -3,7 +3,7 @@ const path = require('path');
 
 const projectRoot = __dirname;
 const outputDirectory = path.join(projectRoot, 'web-dist');
-const files = ['index.html', 'styles.css', 'creative.css', 'renderer.js', 'service-worker.js', 'manifest.webmanifest'];
+const files = ['index.html', 'styles.css', 'creative.css', 'revamp.css', 'renderer.js', 'service-worker.js', 'manifest.webmanifest'];
 
 fs.rmSync(outputDirectory, { recursive: true, force: true });
 fs.mkdirSync(outputDirectory, { recursive: true });
