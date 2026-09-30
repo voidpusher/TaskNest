@@ -10,6 +10,7 @@ if (!window.tasknest) {
     saveSettings: async (update) => { const settings = { ...read(settingsKey, {}), ...update }; write(settingsKey, settings); return settings; },
     toggleWidgetPin: async () => { const current = read(settingsKey, {}); const settings = { ...current, widgetPinned: !current.widgetPinned }; write(settingsKey, settings); return settings; },
     openMain: () => { window.location.href = 'index.html'; },
+    openContent: async (url) => { window.open(url, '_blank', 'noopener,noreferrer'); return true; },
     minimizeWidget: () => {}, closeWidget: () => window.close(), removeWidget: () => {}, cancelVoice: () => {},
     onTasksChanged: () => {}, onWidgetSettings: () => {}
   };
@@ -37,6 +38,14 @@ let nativeVoiceActive = false;
 let nativeVoiceCancelled = false;
 let settings = { widgetPinned: true, widgetView: 'today', timeTarget: null };
 let widgetMode = 'today';
+
+function safeContentUrl(value) {
+  try {
+    if (!value || String(value).length > 2048) return null;
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password ? url.href : null;
+  } catch { return null; }
+}
 
 function normalizeTask(task) {
   const createdAt = Number(task.createdAt) || Date.now();
@@ -269,28 +278,28 @@ function render() {
   const target = settings.timeTarget;
   if (widgetMode === 'timeTarget' && !target) widgetMode = 'today';
   const visibleTasks = tasks
-    .filter((task) => !task.archived && (widgetMode === 'timeTarget' ? task.timeTargetId === target?.id : task.date === today))
+    .filter((task) => !task.archived && (widgetMode === 'content' ? task.contentKind && !task.done : widgetMode === 'timeTarget' ? task.timeTargetId === target?.id : task.date === today))
     .sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
   const complete = visibleTasks.filter((task) => task.done).length;
   const percent = visibleTasks.length ? Math.round(complete / visibleTasks.length * 100) : 0;
   document.querySelectorAll('[data-widget-mode]').forEach((button) => button.classList.toggle('active', button.dataset.widgetMode === widgetMode));
   document.querySelector('[data-widget-mode="timeTarget"]').disabled = !target;
-  document.getElementById('dateLabel').textContent = widgetMode === 'timeTarget' ? 'ACTIVE TIME TARGET' : new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase();
-  document.getElementById('widgetHeading').textContent = widgetMode === 'timeTarget' ? target.label : 'Today’s focus';
+  document.getElementById('dateLabel').textContent = widgetMode === 'content' ? 'YOUR SAVED STUFF' : widgetMode === 'timeTarget' ? 'ACTIVE TIME TARGET' : new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase();
+  document.getElementById('widgetHeading').textContent = widgetMode === 'content' ? 'Saved for later' : widgetMode === 'timeTarget' ? target.label : 'Today’s focus';
   document.getElementById('scoreValue').textContent = `${percent}%`;
   document.getElementById('progressBar').style.width = `${percent}%`;
-  document.getElementById('remainingLabel').textContent = visibleTasks.length - complete ? `${visibleTasks.length - complete} still open` : visibleTasks.length ? 'Everything complete' : 'Nothing pending';
-  quickInput.placeholder = widgetMode === 'timeTarget' ? 'Add to this time target…' : 'Add today’s task…';
-  quickInput.setAttribute('aria-label', widgetMode === 'timeTarget' ? 'Add a task to this time target' : 'Add today’s task');
+  document.getElementById('remainingLabel').textContent = widgetMode === 'content' ? `${visibleTasks.length} to explore` : visibleTasks.length - complete ? `${visibleTasks.length - complete} still open` : visibleTasks.length ? 'Everything complete' : 'Nothing pending';
+  quickInput.placeholder = widgetMode === 'content' ? 'Paste a link or jot an idea…' : widgetMode === 'timeTarget' ? 'Add to this time target…' : 'Add today’s task…';
+  quickInput.setAttribute('aria-label', widgetMode === 'content' ? 'Save a link or idea' : widgetMode === 'timeTarget' ? 'Add a task to this time target' : 'Add today’s task');
   document.getElementById('targetSummary').classList.toggle('hidden', widgetMode !== 'timeTarget');
-  document.getElementById('emptyTitle').textContent = widgetMode === 'timeTarget' ? 'This block is empty' : 'Nothing here yet';
-  document.getElementById('emptyCopy').textContent = widgetMode === 'timeTarget' ? 'Add the first to-do for this time period.' : 'Add today’s first task above.';
+  document.getElementById('emptyTitle').textContent = widgetMode === 'content' ? 'Your inspiration shelf is empty' : widgetMode === 'timeTarget' ? 'This block is empty' : 'Nothing here yet';
+  document.getElementById('emptyCopy').textContent = widgetMode === 'content' ? 'Paste a link or save an idea above.' : widgetMode === 'timeTarget' ? 'Add the first to-do for this time period.' : 'Add today’s first task above.';
   emptyState.classList.toggle('hidden', visibleTasks.length !== 0);
   widgetList.classList.toggle('hidden', visibleTasks.length === 0);
-  widgetList.innerHTML = visibleTasks.map((task) => `<article class="widget-task ${task.done ? 'done' : ''}" data-id="${task.id}">
+  widgetList.innerHTML = visibleTasks.map((task) => `<article class="widget-task ${task.done ? 'done' : ''} ${widgetMode === 'content' ? 'content-item' : ''}" data-id="${task.id}">
     <button class="check" data-action="toggle" aria-label="${task.done ? 'Reopen' : 'Complete'} task"><svg viewBox="0 0 24 24"><path d="m6 12 4 4 8-9"/></svg></button>
     <button class="task-title" data-action="edit" title="Click to edit">${escapeHtml(task.title)}</button>
-    <button class="edit" data-action="edit" aria-label="Edit task" title="Edit task"><svg viewBox="0 0 24 24"><path d="m4 16-.8 4 4-.8L18 8.4 14.6 5 4 16Z"/></svg></button>
+    ${widgetMode === 'content' ? `<button class="content-open" data-action="open" aria-label="Open saved link" title="Open saved link" ${task.contentUrl ? '' : 'disabled'}><svg viewBox="0 0 24 24"><path d="M8 4H4v16h16v-4M13 4h7v7M20 4l-9 9"/></svg></button>` : `<button class="edit" data-action="edit" aria-label="Edit task" title="Edit task"><svg viewBox="0 0 24 24"><path d="m4 16-.8 4 4-.8L18 8.4 14.6 5 4 16Z"/></svg></button>`}
     <button class="delete" data-action="delete" aria-label="Delete task" title="Delete task"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></button>
   </article>`).join('');
   renderTargetClock();
@@ -352,8 +361,17 @@ function beginInlineEdit(item, index) {
 document.getElementById('quickForm').addEventListener('submit', (event) => {
   event.preventDefault();
   stopVoiceInput(true);
-  const title = quickInput.value.trim();
-  if (!title) { quickInput.focus(); return; }
+  const input = quickInput.value.trim();
+  if (!input) { quickInput.focus(); return; }
+  const contentInput = widgetMode === 'content';
+  const urlInput = contentInput && (input.startsWith('www.') ? `https://${input}` : input);
+  const url = contentInput ? safeContentUrl(urlInput) : null;
+  if (contentInput && (/^[a-z][a-z\d+.-]*:\/\//i.test(urlInput) || input.startsWith('www.')) && !url) { showToast('Use a valid web link'); return; }
+  const host = url ? new URL(url).hostname.replace(/^www\./, '') : '';
+  const isVideo = url && /(^|\.)(youtube\.com|youtu\.be|vimeo\.com|tiktok\.com)$/i.test(host);
+  const isAudio = url && /(^|\.)(spotify\.com|soundcloud\.com|music\.apple\.com)$/i.test(host);
+  const contentKind = contentInput ? url ? isVideo ? 'video' : isAudio ? 'audio' : 'article' : 'idea' : null;
+  const title = url ? `${isVideo ? 'Watch' : isAudio ? 'Listen to' : 'Read'} ${host}` : input;
   const now = Date.now();
   tasks.push(normalizeTask({
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -363,7 +381,7 @@ document.getElementById('quickForm').addEventListener('submit', (event) => {
     status: 'open',
     done: false,
     archived: false,
-    date: today,
+    date: contentInput ? null : today,
     dueTime: null,
     estimatedMinutes: null,
     projectId: null,
@@ -374,10 +392,12 @@ document.getElementById('quickForm').addEventListener('submit', (event) => {
     completedAt: null,
     updatedAt: now,
     order: nextTaskOrder(),
-    timeTargetId: widgetMode === 'timeTarget' ? settings.timeTarget?.id || null : null
+    timeTargetId: widgetMode === 'timeTarget' ? settings.timeTarget?.id || null : null,
+    contentKind,
+    contentUrl: url
   }));
   quickInput.value = '';
-  persist('Task saved');
+  persist(contentInput ? 'Saved for later' : 'Task saved');
   render();
   quickInput.focus();
 });
@@ -400,7 +420,10 @@ widgetList.addEventListener('click', (event) => {
   const index = tasks.findIndex((task) => task.id === item.dataset.id);
   if (index < 0) return;
 
-  if (button.dataset.action === 'toggle') {
+  if (button.dataset.action === 'open') {
+    const url = safeContentUrl(tasks[index].contentUrl);
+    if (url) Promise.resolve(window.tasknest.openContent(url)).catch(() => showToast('Could not open link'));
+  } else if (button.dataset.action === 'toggle') {
     tasks[index].done = !tasks[index].done;
     tasks[index].status = tasks[index].done ? 'completed' : 'open';
     tasks[index].completedAt = tasks[index].done ? Date.now() : null;
@@ -434,7 +457,7 @@ document.getElementById('removeWidget').addEventListener('click', () => window.t
 
 function applySettings(nextSettings) {
   settings = { ...settings, ...nextSettings };
-  widgetMode = settings.widgetView === 'timeTarget' && settings.timeTarget ? 'timeTarget' : 'today';
+  widgetMode = settings.widgetView === 'content' ? 'content' : settings.widgetView === 'timeTarget' && settings.timeTarget ? 'timeTarget' : 'today';
   pinButton.classList.toggle('unpinned', !settings.widgetPinned);
   pinButton.title = settings.widgetPinned ? 'Stop keeping above other windows' : 'Keep above other windows';
   render();

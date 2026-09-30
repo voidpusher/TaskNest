@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, Notification, session, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Notification, session, Tray, Menu, nativeImage, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -142,6 +142,8 @@ function normalizeTask(task) {
     id: String(task.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
     title,
     description: String(task.description || '').trim().slice(0, 4000),
+    contentKind: ['video', 'article', 'audio', 'idea'].includes(task.contentKind) ? task.contentKind : null,
+    contentUrl: safeContentUrl(task.contentUrl),
     status: done ? 'completed' : 'open',
     priority: ['high', 'normal', 'low'].includes(task.priority) ? task.priority : 'normal',
     done,
@@ -169,6 +171,13 @@ function normalizeTask(task) {
     focusSessions,
     activeSession
   };
+}
+
+function safeContentUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password && url.href.length <= 2048 ? url.href : '';
+  } catch { return ''; }
 }
 
 function normalizeProject(project) {
@@ -399,7 +408,7 @@ function readSettings() {
     durationSeconds: Math.max(60, Math.round(Number(raw.timeTarget.durationSeconds) || (Number(raw.timeTarget.endsAt) - Number(raw.timeTarget.startedAt)) / 1000)),
     notifiedAt: Number(raw.timeTarget.notifiedAt) || null
   } : null;
-  return { ...raw, widgetView: raw.widgetView === 'timeTarget' ? 'timeTarget' : 'today', timeTarget: target };
+  return { ...raw, widgetView: ['today', 'timeTarget', 'content'].includes(raw.widgetView) ? raw.widgetView : 'today', timeTarget: target };
 }
 
 function saveSettings(update) {
@@ -526,6 +535,11 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => { isQuitting = true; });
 
 ipcMain.handle('tasks:load', () => readTasks());
+ipcMain.handle('content:open', (_event, value) => {
+  const url = safeContentUrl(value);
+  if (!url) return false;
+  return shell.openExternal(url).then(() => true).catch(() => false);
+});
 ipcMain.handle('tasks:save', (_event, tasks) => {
   const saved = writeTasks(tasks);
   setImmediate(checkReminders);

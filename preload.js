@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('tasknest', {
   loadTasks: () => ipcRenderer.invoke('tasks:load'),
   saveTasks: (tasks) => ipcRenderer.invoke('tasks:save', tasks),
+  openContent: (url) => ipcRenderer.invoke('content:open', url),
   loadSettings: () => ipcRenderer.invoke('settings:load'),
   saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),
   loadWeeklyTargets: () => ipcRenderer.invoke('targets:load'),

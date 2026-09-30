@@ -168,3 +168,43 @@ form .voice-button svg { width:14px; }
 footer { min-height:22px; padding-top:4px; font-size:8px; }
 footer button { font-size:8px; }
 @media (max-height:500px) { main { padding-top:6px; } }
+
+/* The compact companion to TaskNest's creative journal. */
+:root { --bg:#f7f0e8; --border:#e6d5e7; --text:#312a41; --muted:#776d80; --sage:#7955c8; --danger:#d85f53; --yellow:#f7c972; --green:#b6d878; }
+body { background:var(--bg); border-color:#e8d8df; }
+body::before { filter:blur(4px) saturate(.7) brightness(1.15); }
+body::after { background:linear-gradient(145deg,rgba(255,248,241,.93),rgba(242,230,249,.84)); }
+.widget-titlebar { background:#fff8ee; border-bottom-color:#eadde4; }
+.widget-brand { color:#30283e; font-weight:750; }
+main { background:linear-gradient(145deg,rgba(255,250,243,.88),rgba(248,239,245,.84)); }
+.day-heading p { color:#7653b6; }
+.widget-mode-switch { border-color:#e4d7e8; background:#eee5f4; }
+.widget-mode-switch button { color:#766984; }
+.widget-mode-switch button:hover:not(:disabled) { color:#4e347c; background:#fff8f1; }
+.widget-mode-switch button.active { color:#352649; background:#d7ea9e; box-shadow:0 2px 0 #b8d476; }
+.target-summary { border-color:#e5cbe0; background:#f6eafa; }
+.target-summary span { color:#7955c8; }
+.target-summary-actions button { border-color:#dbc9e4; color:#6845a7; background:#fff; }
+.target-summary-actions button:hover { border-color:#7955c8; background:#7955c8; }
+form input { border-color:#dfd1e1; background:#fffdf9; }
+form input:focus { border-color:#a688df; box-shadow:0 0 0 3px rgba(121,85,200,.12); }
+form button { color:#fff; background:#7955c8; box-shadow:0 3px 0 #583997; }
+form button:hover { filter:brightness(1.08); }
+form .voice-button { border-color:#e4d6e6; color:#7a6c86; background:#fff; }
+form .voice-button:hover { color:#7955c8; border-color:#bda6dc; background:#fff; }
+.widget-task { border-color:#eadfe8; background:#fffefa; box-shadow:0 2px 0 #eee2e8; }
+.widget-task:hover { border-color:#d9bde3; background:#fff; box-shadow:0 4px 12px rgba(70,43,87,.1); }
+.check { border-color:#aa8fc4; }
+.widget-task.done .check { border-color:#aacd6d; background:#b6d878; }
+.widget-task.done .check svg { stroke:#31442a; }
+.empty span { color:#7955c8; background:#eadff5; }
+.edit:hover { color:#7955c8; background:#f2eafa; }
+.inline-edit { border-color:#a688df; box-shadow:0 0 0 3px rgba(121,85,200,.12); }
+.toast button { color:#7955c8; }
+.widget-mode-switch { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.widget-task.content-item { grid-template-columns:21px minmax(0,1fr) 27px 27px; }
+.widget-task.content-item .task-title { cursor:text; }
+.widget-task.content-item .content-open { width:27px; height:27px; padding:0; border:0; border-radius:7px; display:grid; place-items:center; color:#7955c8; background:#f1eafa; cursor:pointer; }
+.widget-task.content-item .content-open:hover { color:#fff; background:#7955c8; }
+.widget-task.content-item .content-open:disabled { opacity:.25; cursor:default; }
+.widget-task.content-item .content-open svg { width:14px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }

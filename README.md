@@ -5,7 +5,7 @@ TaskNest is a private Windows daily planner with a separate, resizable desktop w
 ## Install
 
 1. Open the `dist` folder.
-2. Run `TaskNest-Setup-2.1.4.exe`.
+2. Run `TaskNest-Setup-2.2.0.exe`.
 3. Choose an install location. The installer creates a desktop shortcut.
 
 ## Use
@@ -23,6 +23,7 @@ TaskNest is a private Windows daily planner with a separate, resizable desktop w
 - Start a live 3-, 5-, or 8-hour target, or work toward a chosen finish time such as 2:00 PM. The remaining time stays synchronized with the clock.
 - Timed tasks on the same date require at least a two-hour gap; conflicting edits and reschedules are stopped with a clear explanation.
 - Create projects from the **Projects** page and assign tasks from the full task editor.
+- Open **Content** to collect videos, articles, audio, and ideas. Save a link with notes, optionally put it on today's list, and mark it explored when finished.
 - Open **Weekly targets** to create a recurring goal such as “Deep work — 3 days.”
 - Add a weekly target to the selected day to create a linked daily task. Completing that task automatically updates the weekly progress, and the task also appears in the desktop widget.
 - Click the square beside a task to complete it.
@@ -32,6 +33,7 @@ TaskNest is a private Windows daily planner with a separate, resizable desktop w
 - **Hide completed** keeps finished tasks in your daily record without cluttering the list.
 - Click **Put today’s tasks on your desktop** to open the separate widget.
 - Add or complete today’s tasks directly inside the widget. It stays synced with the planner.
+- Switch the widget to **Saved** to quickly paste a link or capture an idea; the item appears in the planner's Content view.
 - Click a task in the widget to edit its title inline.
 - Resize the widget by dragging any edge or corner, and move it by dragging its title bar.
 - The pin icon controls whether the widget stays above other windows.

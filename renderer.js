@@ -18,6 +18,7 @@ if (!window.tasknest) {
   window.tasknest = {
     loadTasks: async () => read(keys.tasks, starterTasks),
     saveTasks: async (items) => write(keys.tasks, items),
+    openContent: async (url) => { window.open(url, '_blank', 'noopener,noreferrer'); return true; },
     loadSettings: async () => read(keys.settings, { widgetEnabled: false }),
     saveSettings: async (settings) => { const next = { ...read(keys.settings, {}), ...settings }; write(keys.settings, next); return next; },
     loadWeeklyTargets: async () => read(keys.targets, []),
@@ -67,6 +68,8 @@ let projects = [];
 let selectedDate = localDateKey(new Date());
 let activeView = 'today';
 let activeFilter = 'all';
+let contentFilter = 'open';
+let contentKindDraft = 'video';
 let searchQuery = '';
 let widgetEnabled = false;
 let timeTarget = null;
@@ -178,6 +181,17 @@ function escapeHtml(value) {
   return div.innerHTML;
 }
 
+function escapeAttribute(value) {
+  return escapeHtml(value).replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+}
+
+function safeContentUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password && url.href.length <= 2048 ? url.href : '';
+  } catch { return ''; }
+}
+
 function normalizeClientTask(task) {
   const createdAt = Number(task.createdAt) || Date.now();
   const done = task.status === 'completed' || Boolean(task.done);
@@ -186,6 +200,8 @@ function normalizeClientTask(task) {
     id: String(task.id || uid()),
     title: String(task.title || '').trim(),
     description: String(task.description || ''),
+    contentKind: ['video', 'article', 'audio', 'idea'].includes(task.contentKind) ? task.contentKind : null,
+    contentUrl: safeContentUrl(task.contentUrl),
     status: done ? 'completed' : 'open',
     done,
     priority: ['high', 'normal', 'low'].includes(task.priority) ? task.priority : 'normal',
@@ -275,7 +291,7 @@ function visibleTasks() {
   if (activeFilter === 'active') items = items.filter((task) => !task.done);
   if (activeFilter === 'done') items = items.filter((task) => task.done);
   if (searchQuery) {
-    items = items.filter((task) => [task.title, task.description, ...task.subtasks.map((subtask) => subtask.title)]
+    items = items.filter((task) => [task.title, task.description, task.contentUrl, task.contentKind, ...task.subtasks.map((subtask) => subtask.title)]
       .join(' ').toLocaleLowerCase().includes(searchQuery));
   }
   return sortedTasks(items);
@@ -615,12 +631,14 @@ function setTaskCompletion(task, done) {
 }
 
 function setView(view) {
+  const previousView = activeView;
   activeView = view;
   if (view === 'today') selectedDate = localDateKey(new Date());
   activeFilter = view === 'completed' ? 'done' : 'all';
   selectionMode = false;
   selectedTaskIds.clear();
   render();
+  if (previousView !== view && view === 'content') $('contentPage').scrollTop = 0;
 }
 
 function chooseDate(key) {
@@ -744,6 +762,8 @@ function taskMetaHtml(task) {
   if (task.recurrence !== 'none') pieces.push(`<span>↻ ${escapeHtml(recurrenceLabel(task.recurrence, task.recurrenceRule))}</span>`);
   if (task.reminders.length) pieces.push(`<span>◷ ${task.reminders.length} reminder${task.reminders.length === 1 ? '' : 's'}</span>`);
   if (task.subtasks.length) pieces.push(`<span>${task.subtasks.filter((item) => item.done).length}/${task.subtasks.length} steps</span>`);
+  if (task.contentKind) pieces.push(`<span class="content-task-meta">${{ video: '▶ Watch', article: '▤ Read', audio: '♫ Listen', idea: '✦ Idea' }[task.contentKind]}</span>`);
+  if (task.contentUrl) pieces.push(`<button class="task-content-link" data-action="open-content" type="button" aria-label="Open saved link">Open link ↗</button>`);
   if (task.weeklyTargetId) pieces.push('<span>Weekly target</span>');
   if (task.timeTargetId) pieces.push('<span>Time block</span>');
   if (task.actualSeconds) pieces.push(`<span>${formatCompactDuration(task.actualSeconds)} focused</span>`);
@@ -1019,6 +1039,7 @@ function renderNav() {
   $('overdueCount').textContent = live.filter((task) => task.date && task.date < today && !task.done).length;
   $('completedCount').textContent = live.filter((task) => task.done).length;
   $('projectsCount').textContent = projects.filter((project) => !project.archived).length;
+  $('contentCount').textContent = live.filter((task) => task.contentKind && !task.done).length;
   document.querySelectorAll('[data-view]').forEach((button) => {
     const view = button.dataset.view;
     button.classList.toggle('active', activeView === view || (view === 'projects' && activeView.startsWith('project:')));
@@ -1031,6 +1052,39 @@ function renderWidgetCard() {
   $('widgetCardText').textContent = widgetEnabled ? 'It stays synced and opens again with Windows.' : 'Mark tasks done without opening the full planner.';
   $('widgetCardAction').textContent = widgetEnabled ? 'Remove widget' : 'Add widget';
   $('desktopWidgetButton').classList.toggle('active', widgetEnabled);
+}
+
+function renderContentPage() {
+  const content = sortedTasks(activeTasks().filter((task) => task.contentKind));
+  const open = content.filter((task) => !task.done);
+  const done = content.filter((task) => task.done);
+  $('contentOpenCount').textContent = `${open.length} to explore`;
+  $('contentDoneCount').textContent = `${done.length} explored`;
+  const filtered = (contentFilter === 'open' ? open : contentFilter === 'done' ? done : content)
+    .filter((task) => !searchQuery || [task.title, task.description, task.contentUrl, task.contentKind].join(' ').toLocaleLowerCase().includes(searchQuery));
+  const kinds = { video: ['▶', 'WATCH'], article: ['▤', 'READ'], audio: ['♫', 'LISTEN'], idea: ['✦', 'IDEA'] };
+  $('contentGrid').innerHTML = filtered.map((task, index) => {
+    const [symbol, label] = kinds[task.contentKind];
+    const host = task.contentUrl ? new URL(task.contentUrl).hostname.replace(/^www\./, '') : '';
+    return `<article class="content-card kind-${task.contentKind} ${task.done ? 'done' : ''}" data-content-id="${escapeAttribute(task.id)}">
+      <div class="content-card-top"><span class="content-type-mark" aria-hidden="true">${symbol}</span><span class="content-type-label">${label}</span><button class="content-card-menu" data-content-action="edit" type="button" aria-label="Edit saved content">Edit</button><button class="content-card-menu content-card-remove" data-content-action="delete" type="button" aria-label="Remove saved content">×</button></div>
+      <h3>${escapeHtml(task.title)}</h3>
+      ${task.description ? `<p class="content-card-notes">${escapeHtml(task.description)}</p>` : '<p class="content-card-notes muted">A little space for your thoughts.</p>'}
+      <div class="content-card-source">${host ? `<span class="content-source-dot"></span>${escapeHtml(host)}` : 'Saved thought'}${task.date ? `<span>· ${escapeHtml(taskDateLabel(task))}</span>` : ''}</div>
+      <div class="content-card-actions">${task.contentUrl ? `<button data-content-action="open" type="button">Open ${task.contentKind === 'video' ? 'video' : task.contentKind === 'audio' ? 'audio' : 'link'} <span aria-hidden="true">↗</span></button>` : `<button data-content-action="edit" type="button">Add details <span aria-hidden="true">↗</span></button>`}<button class="content-done-button" data-content-action="toggle" type="button">${task.done ? 'Reopen' : 'Mark explored'}</button></div>
+    </article>`;
+  }).join('');
+  $('contentEmpty').classList.toggle('hidden', filtered.length > 0);
+  $('contentEmpty').querySelector('strong').textContent = searchQuery ? 'No matching discoveries.' : contentFilter === 'done' ? 'Nothing finished yet.' : contentFilter === 'open' && done.length ? 'You explored everything.' : 'Room for a good discovery.';
+  $('contentEmpty').querySelector('p').textContent = searchQuery ? 'Try a different word in the search box.' : contentFilter === 'done' ? 'What you finish will show up here.' : contentFilter === 'open' && done.length ? 'Open Finished to revisit an item, or save something new above.' : 'Save a link or a thought above. It will live here until you’re ready.';
+  document.querySelectorAll('[data-content-filter]').forEach((button) => button.classList.toggle('active', button.dataset.contentFilter === contentFilter));
+}
+
+async function openContentLink(task) {
+  const url = safeContentUrl(task?.contentUrl);
+  if (!url) return showToast('Add a valid link to this item first');
+  const opened = await window.tasknest.openContent(url);
+  if (!opened) showToast('Could not open this link');
 }
 
 function upcomingReminders() {
@@ -1238,14 +1292,24 @@ function renderSpecialUtility() {
     $('focusBar').style.width = `${percentage}%`;
     $('focusMessage').textContent = projectTasks.length ? `${projectTasks.length - completed} project tasks still open.` : 'Create a project to group related work.';
   }
+  if (activeView === 'content') {
+    const content = activeTasks().filter((task) => task.contentKind);
+    const completed = content.filter((task) => task.done).length;
+    const percentage = content.length ? Math.round(completed / content.length * 100) : 0;
+    $('progressValue').textContent = `${percentage}%`;
+    $('focusBar').style.width = `${percentage}%`;
+    const remaining = content.length - completed;
+    $('focusMessage').textContent = content.length ? remaining ? `${remaining} ${remaining === 1 ? 'thing' : 'things'} left to explore.` : 'Everything in your queue has been explored.' : 'Save something that sparks your curiosity.';
+  }
 }
 
 function render() {
-  const special = ['weekly', 'projects'].includes(activeView);
+  const special = ['weekly', 'projects', 'content'].includes(activeView);
   $('taskView').classList.toggle('hidden', special);
   $('taskView').classList.toggle('today-mode', activeView === 'today');
   $('weeklyPage').classList.toggle('hidden', activeView !== 'weekly');
   $('projectsPage').classList.toggle('hidden', activeView !== 'projects');
+  $('contentPage').classList.toggle('hidden', activeView !== 'content');
   if (!special) { renderHeaderAndProgress(); renderTaskList(); }
   renderTodayCommand();
   renderNav();
@@ -1253,6 +1317,7 @@ function render() {
   renderCalendar();
   renderWeeklyTargets();
   renderProjects();
+  renderContentPage();
   if (special) renderSpecialUtility();
   renderWidgetCard();
   renderTimeTarget();
@@ -1343,6 +1408,8 @@ function openEditor(task = null) {
   $('editHeading').textContent = task ? 'Edit task' : 'Create a complete task';
   $('editTitle').value = task?.title || '';
   $('editDescription').value = task?.description || '';
+  $('editContentUrl').value = task?.contentUrl || '';
+  $('editContentKind').value = task?.contentKind || '';
   $('editStatus').value = task?.status || 'open';
   $('editPriority').value = task?.priority || 'normal';
   $('editProject').value = task?.projectId || (activeView.startsWith('project:') ? activeView.slice(8) : '');
@@ -1399,6 +1466,56 @@ voiceLanguage.addEventListener('change', () => {
   setVoiceStatus(`Ready for ${voiceLanguageName()}`, 'idle');
 });
 $('newTaskButton').addEventListener('click', () => openEditor());
+$('saveContentButton').addEventListener('click', () => { setView('content'); $('contentUrl').focus(); });
+$('heroContentButton').addEventListener('click', () => { setView('content'); $('contentUrl').focus(); });
+$('contentForm').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const rawUrl = $('contentUrl').value.trim();
+  const url = safeContentUrl(rawUrl);
+  if (rawUrl && !url) return showToast('Use a valid http or https link');
+  const notes = $('contentNotes').value.trim();
+  let title = $('contentTitle').value.trim();
+  if (!title && url) {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    title = `${{ video: 'Watch', article: 'Read', audio: 'Listen to', idea: 'Explore' }[contentKindDraft]} ${host}`;
+  }
+  if (!title && notes) title = notes.split(/[.!?\n]/)[0].slice(0, 72).trim() || 'An idea to revisit';
+  if (!title) return showToast('Add a title, link, or note first');
+  const date = $('contentDate').value || null;
+  if (date && !validDateKey(date)) return showToast('Choose a valid date');
+  tasks.push(newTask(title, { date, description: notes, contentKind: contentKindDraft, contentUrl: url }));
+  $('contentForm').reset();
+  contentFilter = 'open';
+  persist('Saved to your content queue');
+  render();
+  $('contentUrl').focus();
+});
+document.querySelector('.content-kind-switch').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-content-kind]');
+  if (!button) return;
+  contentKindDraft = button.dataset.contentKind;
+  document.querySelectorAll('[data-content-kind]').forEach((option) => option.classList.toggle('active', option === button));
+});
+document.querySelector('.content-filters').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-content-filter]');
+  if (!button) return;
+  contentFilter = button.dataset.contentFilter;
+  renderContentPage();
+});
+$('contentGrid').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-content-action]');
+  const card = button?.closest('[data-content-id]');
+  const task = tasks.find((item) => item.id === card?.dataset.contentId);
+  if (!task || !button) return;
+  if (button.dataset.contentAction === 'open') return openContentLink(task);
+  if (button.dataset.contentAction === 'edit') return openEditor(task);
+  if (button.dataset.contentAction === 'delete') return softDeleteTasks(new Set([task.id]), 'Content removed');
+  if (button.dataset.contentAction === 'toggle') {
+    setTaskCompletion(task, !task.done);
+    persist(task.done ? 'Explored — nicely done' : 'Back in your queue');
+    render();
+  }
+});
 $('editRecurrence').addEventListener('change', renderScheduleEditor);
 $('editRecurrenceInterval').addEventListener('input', renderScheduleEditor);
 $('editRecurrenceUnit').addEventListener('change', renderScheduleEditor);
@@ -1450,7 +1567,8 @@ taskList.addEventListener('click', (event) => {
     const targetReached = target && task.done && weeklyTargetProgress(target) >= target.target;
     persist(next ? `Completed · next ${recurrenceLabel(task.recurrence, task.recurrenceRule).toLowerCase()} task created` : targetReached ? `${target.title}: weekly target reached` : task.done ? 'Nicely done' : 'Task reopened');
     render();
-  } else if (actionButton.dataset.action === 'edit') openEditor(task);
+  } else if (actionButton.dataset.action === 'open-content') openContentLink(task);
+  else if (actionButton.dataset.action === 'edit') openEditor(task);
   else if (actionButton.dataset.action === 'focus') startFocus(task);
   else if (actionButton.dataset.action === 'recover') openRecovery(task);
   else if (actionButton.dataset.action === 'duplicate') duplicateTask(task);
@@ -1609,6 +1727,8 @@ editForm.addEventListener('submit', (event) => {
   event.preventDefault();
   if (event.submitter?.value === 'cancel') return editDialog.close();
   const title = $('editTitle').value.trim();
+  const contentUrl = safeContentUrl($('editContentUrl').value);
+  if ($('editContentUrl').value.trim() && !contentUrl) return showToast('Use a valid http or https link');
   const date = $('editDate').value || null;
   const dueTime = date && $('editTime').value ? $('editTime').value : null;
   if (!title || (date && !validDateKey(date))) return;
@@ -1622,6 +1742,8 @@ editForm.addEventListener('submit', (event) => {
   const wasDone = task.done;
   task.title = title;
   task.description = $('editDescription').value.trim();
+  task.contentUrl = contentUrl;
+  task.contentKind = $('editContentKind').value || (task.contentUrl ? 'article' : null);
   task.priority = $('editPriority').value;
   task.projectId = $('editProject').value || null;
   const previousDate = task.date;
