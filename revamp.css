@@ -196,3 +196,91 @@ body:not(.web-runtime) .title-widget-button { margin-right:142px; }
   .today-metric:nth-child(-n+2) { border-bottom:1px solid #eee7e2; }
 }
 @media (prefers-reduced-motion:reduce) { .day-header { animation:none; } .utility-column,.tools-backdrop { transition:none; } }
+
+/* Alpine scene: the original Himalayan photograph stays visible behind one calm canvas. */
+:root {
+  --ink:#233438;
+  --paper:#f9faf5;
+  --paper-raised:#fffefa;
+  --paper-muted:#edf2e9;
+  --paper-line:#dbe4df;
+  --rail:#203d3d;
+  --rail-muted:#c6d7cf;
+  --creative-purple:#376b68;
+  --creative-coral:#cf7565;
+  --creative-lime:#efce80;
+}
+body { background:#b7c9c5; }
+body::before { opacity:1; filter:blur(1px) saturate(.88) contrast(.98) brightness(1.03); }
+body::after { background:linear-gradient(110deg,rgba(228,237,228,.08),rgba(247,236,216,.12)); }
+.titlebar { border-color:#d9e3de; background:#fafaf4; }
+.title-tools-button,.title-widget-button { border-color:#d7e1db; color:#315452; background:#fffefa; }
+.title-tools-button:hover,.title-widget-button:hover,.title-tools-button[aria-expanded="true"] { border-color:#80a5a0; color:#224f4b; background:#e8f1e9; }
+.app-shell { background:transparent; }
+.sidebar { border-color:rgba(230,238,227,.2); color:#f8f7e9; background:rgba(26,54,55,.94); }
+.new-task-cta { color:#263b3b; background:#f0cc7a; }
+.new-task-cta:hover { color:#263b3b; background:#f7d995; box-shadow:0 5px 16px rgba(8,30,29,.22); }
+.save-content-cta { color:#f6d7ae; }
+.save-content-cta:hover { color:#fff1d5; background:rgba(255,240,208,.1); }
+.nav-item { color:#d5e3da; }
+.nav-item:hover { color:#fff; background:rgba(235,246,229,.12); }
+.nav-item.active { color:#223d3c; background:#e9e3c2; }
+.nav-count,.nav-item.active .nav-count { color:inherit; }
+.nav-count.danger:not(:empty) { color:#efaaa0; }
+.side-divider { border-color:rgba(236,244,234,.18); }
+.history-heading,.sidebar-tip { color:#aabdb4; }
+.history-day { color:#d3e1d8; }
+.history-day:hover { color:#fff; background:rgba(235,246,229,.12); }
+.history-day.selected { color:#fff4d9; background:rgba(238,206,128,.14); box-shadow:inset 2px 0 #f0cc7a; }
+.workspace { background:linear-gradient(96deg,rgba(251,252,247,.94) 0%,rgba(250,252,247,.82) 44%,rgba(245,251,246,.53) 100%); }
+.search-row { border-color:rgba(122,149,137,.18); background:rgba(250,251,246,.9); }
+.search-box { border-color:#dce6df; color:#708a80; background:rgba(255,255,251,.88); }
+.search-box:focus-within { border-color:#75a19a; box-shadow:0 0 0 3px rgba(55,107,104,.13); }
+.day-header { border-color:rgba(116,146,131,.28); }
+.day-header .eyebrow { color:#607e74; }
+.day-header h1 { color:#203939; }
+.day-subtitle,.header-progress { color:#667a74; }
+.progress-track { background:rgba(96,127,110,.2); }
+.progress-track span { background:#dc9b69; }
+.task-form { border-color:#b8cec4; background:#fffefa; box-shadow:0 5px 18px rgba(31,71,58,.08); }
+.task-form:focus-within { border-color:#4f8a80; box-shadow:0 0 0 3px rgba(55,107,104,.13),0 5px 18px rgba(31,71,58,.08); }
+.form-plus { color:#3c736d; }
+.add-button { color:#fff; background:#326d66; }
+.add-button:hover { background:#285a55; }
+.list-toolbar { border-color:rgba(116,146,131,.27); }
+.list-heading span:first-child,.task-title { color:#223b39; }
+.filter.active { color:#285f58; background:#dcebe2; }
+.filter:hover { color:#285f58; background:#e5f0e9; }
+.task-item { border-color:rgba(115,145,131,.18); }
+.task-item:hover { border-color:rgba(86,135,112,.31); background:rgba(224,239,225,.38); }
+.task-action { color:#365e5b; opacity:.64; }
+.task-action:hover { color:#1f504a; background:rgba(232,245,233,.76); }
+.task-meta { color:#5c706e; }
+.task-check { border-color:#68928b; }
+.empty-state h3 { color:#31504c; }
+.empty-mark span { background:#9cbcaf; }
+.planning-panel { border-color:rgba(116,146,131,.27); }
+.task-footer { color:#5c726b; }
+.task-footer .text-button { color:#446963; }
+.planning-summary-label { color:#396861; }
+.planning-panel summary:hover .planning-summary-label { color:#285b54; }
+.today-metrics,.today-lane { border-color:#dce8dd; background:rgba(255,254,249,.9); }
+.today-metric,.today-metric:nth-child(2),.today-metric:nth-child(3),.today-metric:nth-child(4) { border-color:#dce8dd; }
+.content-hero { border-color:rgba(116,146,131,.28); }
+.content-hero h1 { color:#203939; }
+.content-capture,.content-card { border-color:#dce8dd; background:rgba(255,254,249,.94); }
+.content-card.kind-video { background:#fff8ef; }
+.content-card.kind-article { background:#f1f7f0; }
+.content-card.kind-audio { background:#eef6f3; }
+.content-card.kind-idea { background:#fff9e8; }
+.content-save { background:#326d66; }
+.content-save:hover { background:#285a55; }
+.tools-drawer-head,.utility-column { background:#f3f7ef; }
+.tools-drawer-head { border-color:#dce8dd; }
+.tools-drawer-head strong { color:#24423d; }
+.utility-card,.desktop-widget-card,.weekly-summary { border-color:#dce8dd; background:#fffefa; }
+.calendar-day.selected { background:#326d66; }
+@media (max-width:700px) {
+  .sidebar { border-color:rgba(230,238,227,.2); background:rgba(26,54,55,.96); }
+  .workspace { background:linear-gradient(110deg,rgba(251,252,247,.92),rgba(246,251,246,.7)); }
+}
