@@ -3,6 +3,11 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 
+// Keep the original local data directory when the visible product name changes.
+const existingDataDirectory = path.join(app.getPath('appData'), 'tasknest');
+fs.mkdirSync(existingDataDirectory, { recursive: true });
+app.setPath('userData', existingDataDirectory);
+
 let mainWindow;
 let widgetWindow;
 let voiceRecognitionProcess;
@@ -187,7 +192,7 @@ function normalizeProject(project) {
   return {
     id: String(project.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`).slice(0, 120),
     name,
-    color: /^#[0-9a-f]{6}$/i.test(project.color || '') ? project.color : '#0a84ff',
+    color: /^#[0-9a-f]{6}$/i.test(project.color || '') ? project.color : '#aeb9bb',
     archived: Boolean(project.archived),
     createdAt: Number.isFinite(Number(project.createdAt)) ? Number(project.createdAt) : Date.now(),
     updatedAt: Number.isFinite(Number(project.updatedAt)) ? Number(project.updatedAt) : Date.now()
@@ -313,7 +318,7 @@ function checkReminders() {
       const dueAt = reminderTimestamp(task, reminder);
       const reminderKey = `${task.id}:${reminder.id}:${dueAt}`;
       if (!reminder.dismissedAt && dueAt && dueAt <= now && dueAt > now - 86400000 && !notified.has(reminderKey)) {
-        const dueCopy = task.dueTime ? `Due ${task.dueTime}` : task.date ? `Scheduled ${task.date}` : 'Open TaskNest to review';
+        const dueCopy = task.dueTime ? `Due ${task.dueTime}` : task.date ? `Scheduled ${task.date}` : 'Open Worko to review';
         const notification = new Notification({ title: task.title, body: task.description || dueCopy });
         notification.on('click', () => openReminder(task, reminder, dueAt));
         notification.show();
@@ -339,15 +344,15 @@ function checkReminders() {
 
 function createTray() {
   if (tray) return tray;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" rx="9" fill="#0a84ff"/><path d="M8 16l5 5L24 10" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 64 64"><rect width="64" height="64" rx="17" fill="#17191a"/><path d="m11 22 10 23 11-19 11 19 10-23" fill="none" stroke="#edf1f1" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="49" cy="15" r="4" fill="#aeb9bb"/></svg>`;
   const image = nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`).resize({ width: 16, height: 16 });
   tray = new Tray(image);
-  tray.setToolTip('TaskNest — reminders are active');
+  tray.setToolTip('Worko — reminders are active');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open TaskNest', click: () => createMainWindow() },
+    { label: 'Open Worko', click: () => createMainWindow() },
     { label: 'Check reminders now', click: () => checkReminders() },
     { type: 'separator' },
-    { label: 'Quit TaskNest', click: () => { isQuitting = true; app.quit(); } }
+    { label: 'Quit Worko', click: () => { isQuitting = true; app.quit(); } }
   ]));
   tray.on('double-click', () => createMainWindow());
   return tray;
@@ -434,9 +439,10 @@ function createMainWindow() {
     height: 780,
     minWidth: 760,
     minHeight: 560,
-    backgroundColor: '#fffdfa',
+    backgroundColor: '#111214',
+    icon: path.join(__dirname, 'assets', 'worko-icon.png'),
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#fffdfa', symbolColor: '#41394c', height: 56 },
+    titleBarOverlay: { color: '#111214', symbolColor: '#e9eeee', height: 56 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -479,7 +485,8 @@ function createWidgetWindow() {
     resizable: true,
     alwaysOnTop: settings.widgetPinned,
     skipTaskbar: false,
-    backgroundColor: '#171815',
+    backgroundColor: '#111214',
+    icon: path.join(__dirname, 'assets', 'worko-icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 64 64" role="img" aria-label="Worko">
+  <rect width="64" height="64" rx="17" fill="#17191a"/>
+  <path d="m11 22 10 23 11-19 11 19 10-23" fill="none" stroke="#edf1f1" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="49" cy="15" r="4" fill="#aeb9bb"/>
+</svg>

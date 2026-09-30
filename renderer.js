@@ -66,10 +66,11 @@ let tasks = [];
 let weeklyTargets = [];
 let projects = [];
 let selectedDate = localDateKey(new Date());
+let calendarCursor = selectedDate;
 let activeView = 'today';
 let activeFilter = 'all';
 let contentFilter = 'open';
-let contentKindDraft = 'video';
+let contentKindDraft = 'idea';
 let searchQuery = '';
 let widgetEnabled = false;
 let timeTarget = null;
@@ -633,7 +634,7 @@ function setTaskCompletion(task, done) {
 function setView(view) {
   const previousView = activeView;
   activeView = view;
-  if (view === 'today') selectedDate = localDateKey(new Date());
+  if (view === 'today') { selectedDate = localDateKey(new Date()); calendarCursor = selectedDate; }
   activeFilter = view === 'completed' ? 'done' : 'all';
   selectionMode = false;
   selectedTaskIds.clear();
@@ -645,11 +646,11 @@ function setView(view) {
 function chooseDate(key) {
   if (!validDateKey(key)) return;
   selectedDate = key;
+  calendarCursor = key;
   activeView = key === localDateKey(new Date()) ? 'today' : 'date';
   activeFilter = 'all';
   selectionMode = false;
   selectedTaskIds.clear();
-  setToolsOpen(false);
   render();
 }
 
@@ -1011,7 +1012,7 @@ function renderHeaderAndProgress() {
 }
 
 function renderCalendar() {
-  const selected = parseDate(selectedDate);
+  const selected = parseDate(calendarCursor);
   const year = selected.getFullYear();
   const month = selected.getMonth();
   const firstWeekday = new Date(year, month, 1).getDay();
@@ -1025,7 +1026,7 @@ function renderCalendar() {
   }
   calendarGrid.innerHTML = cells.join('');
   datePicker.value = selectedDate;
-  $('todayButton').classList.toggle('hidden', selectedDate === localDateKey(new Date()));
+  $('todayButton').classList.toggle('hidden', calendarCursor === localDateKey(new Date()) && selectedDate === localDateKey(new Date()));
 }
 
 function renderHistory() {
@@ -1078,12 +1079,14 @@ function renderContentPage() {
   $('contentGrid').innerHTML = filtered.map((task, index) => {
     const [symbol, label] = kinds[task.contentKind];
     const host = task.contentUrl ? new URL(task.contentUrl).hostname.replace(/^www\./, '') : '';
+    const note = task.description.trim();
+    const noteRepeatsTitle = note.replace(/[.!?]+$/, '').toLocaleLowerCase() === task.title.trim().replace(/[.!?]+$/, '').toLocaleLowerCase();
     return `<article class="content-card kind-${task.contentKind} ${task.done ? 'done' : ''}" data-content-id="${escapeAttribute(task.id)}">
       <div class="content-card-top"><span class="content-type-mark" aria-hidden="true">${symbol}</span><span class="content-type-label">${label}</span><button class="content-card-menu" data-content-action="edit" type="button" aria-label="Edit saved content">Edit</button><button class="content-card-menu content-card-remove" data-content-action="delete" type="button" aria-label="Remove saved content">×</button></div>
       <h3>${escapeHtml(task.title)}</h3>
-      ${task.description ? `<p class="content-card-notes">${escapeHtml(task.description)}</p>` : '<p class="content-card-notes muted">A little space for your thoughts.</p>'}
-      <div class="content-card-source">${host ? `<span class="content-source-dot"></span>${escapeHtml(host)}` : 'Saved thought'}${task.date ? `<span>· ${escapeHtml(taskDateLabel(task))}</span>` : ''}</div>
-      <div class="content-card-actions">${task.contentUrl ? `<button data-content-action="open" type="button">Open ${task.contentKind === 'video' ? 'video' : task.contentKind === 'audio' ? 'audio' : 'link'} <span aria-hidden="true">↗</span></button>` : `<button data-content-action="edit" type="button">Add details <span aria-hidden="true">↗</span></button>`}<button class="content-done-button" data-content-action="toggle" type="button">${task.done ? 'Reopen' : 'Mark explored'}</button></div>
+      ${note && !noteRepeatsTitle ? `<p class="content-card-notes">${escapeHtml(note)}</p>` : ''}
+      <div class="content-card-source">${host ? `<span class="content-source-dot"></span>${escapeHtml(host)}` : 'Saved without a link'}${task.date ? `<span>· ${escapeHtml(taskDateLabel(task))}</span>` : ''}</div>
+      <div class="content-card-actions">${task.contentUrl ? `<button data-content-action="open" type="button">Open ${task.contentKind === 'video' ? 'video' : task.contentKind === 'audio' ? 'audio' : 'link'} <span aria-hidden="true">↗</span></button>` : `<button data-content-action="edit" type="button">Edit details <span aria-hidden="true">↗</span></button>`}<button class="content-done-button" data-content-action="toggle" type="button">${task.done ? 'Reopen' : 'Mark explored'}</button></div>
     </article>`;
   }).join('');
   $('contentEmpty').classList.toggle('hidden', filtered.length > 0);
@@ -1163,7 +1166,7 @@ function renderTimeTarget() {
   if (!remainingSeconds && !timeTarget.notifiedAt) {
     timeTarget.notifiedAt = now;
     saveTimeTarget('Time target complete');
-    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('Time target complete', { body: `${timeTarget.label || 'Focused window'} is finished.`, icon: 'assets/tasknest-icon.svg' });
+    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('Time target complete', { body: `${timeTarget.label || 'Focused window'} is finished.`, icon: 'assets/worko-mark.svg' });
   }
 }
 
@@ -1200,7 +1203,7 @@ function resetTimeTargetClock() {
 
 async function showBrowserNotification(task, reminder, at) {
   if (!document.documentElement.classList.contains('web-runtime') || !('Notification' in window) || Notification.permission !== 'granted' || !document.hidden) return;
-  const options = { body: task.description || `${task.dueTime ? `Due ${task.dueTime}` : 'TaskNest reminder'}`, tag: `tasknest-${task.id}-${reminder.id}-${at}`, data: { taskId: task.id }, icon: 'assets/tasknest-icon.svg' };
+  const options = { body: task.description || `${task.dueTime ? `Due ${task.dueTime}` : 'Worko reminder'}`, tag: `tasknest-${task.id}-${reminder.id}-${at}`, data: { taskId: task.id }, icon: 'assets/worko-mark.svg' };
   if ('serviceWorker' in navigator) {
     const registration = await navigator.serviceWorker.ready.catch(() => null);
     if (registration) return registration.showNotification(task.title, options);
@@ -1216,7 +1219,7 @@ function presentReminder(task, reminder, at) {
   reminder.lastTriggeredAt = at;
   activeReminder = { taskId: task.id, reminderId: reminder.id };
   $('reminderAlertTitle').textContent = task.title;
-  $('reminderAlertMeta').textContent = task.dueTime ? `Due ${taskDateLabel(task)} at ${task.dueTime}` : task.date ? `Scheduled for ${taskDateLabel(task)}` : 'Open TaskNest to review it.';
+  $('reminderAlertMeta').textContent = task.dueTime ? `Due ${taskDateLabel(task)} at ${task.dueTime}` : task.date ? `Scheduled for ${taskDateLabel(task)}` : 'Open Worko to review it.';
   $('reminderAlert').classList.add('show');
   touch(task);
   persist();
@@ -1478,13 +1481,13 @@ voiceLanguage.addEventListener('change', () => {
   setVoiceStatus(`Ready for ${voiceLanguageName()}`, 'idle');
 });
 $('newTaskButton').addEventListener('click', () => openEditor());
-$('saveContentButton').addEventListener('click', () => { setView('content'); $('contentUrl').focus(); });
-$('heroContentButton').addEventListener('click', () => { setView('content'); $('contentUrl').focus(); });
+$('saveContentButton').addEventListener('click', () => { setView('content'); $('contentTitle').focus(); });
+$('heroContentButton').addEventListener('click', () => { setView('content'); $('contentTitle').focus(); });
 $('contentForm').addEventListener('submit', (event) => {
   event.preventDefault();
   const rawUrl = $('contentUrl').value.trim();
   const url = safeContentUrl(rawUrl);
-  if (rawUrl && !url) return showToast('Use a valid http or https link');
+  if (rawUrl && !url) { $('contentLinkDetails').open = true; $('contentUrl').focus(); return showToast('Use a valid http or https link'); }
   const notes = $('contentNotes').value.trim();
   let title = $('contentTitle').value.trim();
   if (!title && url) {
@@ -1497,10 +1500,11 @@ $('contentForm').addEventListener('submit', (event) => {
   if (date && !validDateKey(date)) return showToast('Choose a valid date');
   tasks.push(newTask(title, { date, description: notes, contentKind: contentKindDraft, contentUrl: url }));
   $('contentForm').reset();
+  $('contentLinkDetails').open = false;
   contentFilter = 'open';
   persist('Saved to your content queue');
   render();
-  $('contentUrl').focus();
+  $('contentTitle').focus();
 });
 document.querySelector('.content-kind-switch').addEventListener('click', (event) => {
   const button = event.target.closest('[data-content-kind]');
@@ -1804,11 +1808,12 @@ datePicker.addEventListener('change', () => chooseDate(datePicker.value));
 $('todayButton').addEventListener('click', () => chooseDate(localDateKey(new Date())));
 
 function chooseAdjacentMonth(offset) {
-  const date = parseDate(selectedDate);
+  const date = parseDate(calendarCursor);
   const preferredDay = date.getDate();
   date.setDate(1); date.setMonth(date.getMonth() + offset);
   date.setDate(Math.min(preferredDay, new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()));
-  chooseDate(localDateKey(date));
+  calendarCursor = localDateKey(date);
+  renderCalendar();
 }
 $('previousDay').addEventListener('click', () => chooseAdjacentMonth(-1));
 $('nextDay').addEventListener('click', () => chooseAdjacentMonth(1));

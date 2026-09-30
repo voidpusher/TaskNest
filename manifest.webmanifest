@@ -1,14 +1,14 @@
 {
-  "name": "TaskNest",
-  "short_name": "TaskNest",
+  "name": "Worko",
+  "short_name": "Worko",
   "description": "A calm daily planner with focus sessions, recurrence, and reminders.",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
-  "background_color": "#eef2f3",
-  "theme_color": "#0a84ff",
+  "background_color": "#111214",
+  "theme_color": "#111214",
   "icons": [
     {
-      "src": "/assets/tasknest-icon.svg",
+      "src": "assets/worko-mark.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

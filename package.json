@@ -1,9 +1,9 @@
 {
   "name": "tasknest",
-  "version": "2.3.2",
-  "description": "A calm desktop to-do list with a resizable widget mode.",
+  "version": "2.4.6",
+  "description": "Worko, a focused daily planner with a resizable desktop widget.",
   "main": "main.js",
-  "author": "TaskNest",
+  "author": "Worko",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -16,7 +16,7 @@
   },
   "build": {
     "appId": "com.tasknest.desktop",
-    "productName": "TaskNest",
+    "productName": "Worko",
     "asar": true,
     "asarUnpack": [
       "voice-recognition.ps1"
@@ -29,9 +29,11 @@
       "creative.css",
       "revamp.css",
       "night.css",
+      "worko.css",
       "renderer.js",
       "widget.html",
       "widget.css",
+      "worko-widget.css",
       "widget.js",
       "voice-recognition.ps1",
       "service-worker.js",
@@ -42,20 +44,21 @@
       "output": "dist"
     },
     "win": {
+      "icon": "assets/worko-icon.ico",
       "target": [
         {
           "target": "nsis",
           "arch": ["x64"]
         }
       ],
-      "artifactName": "TaskNest-Setup-${version}.${ext}"
+      "artifactName": "Worko-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "TaskNest"
+      "shortcutName": "Worko"
     }
   }
 }

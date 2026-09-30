@@ -1,11 +1,11 @@
-# TaskNest
+# Worko
 
-TaskNest is a private Windows daily planner with a separate, resizable desktop widget.
+Worko is a private Windows daily planner with a separate, resizable desktop widget. It retains the original TaskNest data directory and browser storage keys so existing tasks remain available after the rename.
 
 ## Install
 
 1. Open the `dist` folder.
-2. Run `TaskNest-Setup-2.3.2.exe`.
+2. Run `Worko-Setup-2.4.6.exe`.
 3. Choose an install location. The installer creates a desktop shortcut.
 
 ## Use
@@ -41,8 +41,8 @@ TaskNest is a private Windows daily planner with a separate, resizable desktop w
 - Once added, the widget launches with Windows. Use **Remove from desktop** to disable it.
 - Use **Recent days** in the planner to revisit your daily record.
 
-Tasks are stored locally in the Windows application-data folder and remain available after restarting TaskNest.
-TaskNest keeps two rotating local backups, recovers from a damaged primary task file, and prevents stale widget updates from overwriting newer edits.
+Tasks are stored locally in the Windows application-data folder and remain available after restarting Worko.
+Worko keeps two rotating local backups, recovers from a damaged primary task file, and prevents stale widget updates from overwriting newer edits.
 
 ## Shortcuts
 
