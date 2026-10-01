@@ -12,7 +12,8 @@ if (!window.tasknest) {
     openMain: () => { window.location.href = 'index.html'; },
     openContent: async (url) => { window.open(url, '_blank', 'noopener,noreferrer'); return true; },
     minimizeWidget: () => {}, closeWidget: () => window.close(), removeWidget: () => {}, cancelVoice: () => {},
-    onTasksChanged: () => {}, onWidgetSettings: () => {}
+    onTasksChanged: (callback) => window.addEventListener('storage', (event) => { if (event.key === taskKey) callback(); }),
+    onWidgetSettings: (callback) => window.addEventListener('storage', (event) => { if (event.key === settingsKey) callback(read(settingsKey, {})); })
   };
 }
 
@@ -38,6 +39,65 @@ let nativeVoiceActive = false;
 let nativeVoiceCancelled = false;
 let settings = { widgetPinned: true, widgetView: 'today', timeTarget: null };
 let widgetMode = 'today';
+let noteDrafts = {};
+let noteSaveTimer;
+let noteSaving = false;
+let noteRevision = 0;
+
+async function saveWidgetNotes() {
+  clearTimeout(noteSaveTimer);
+  noteSaveTimer = null;
+  if (noteSaving) return;
+  noteSaving = true;
+  const revision = noteRevision;
+  try {
+    await window.tasknest.saveSettings({ dailyNotes: { ...noteDrafts } });
+    if (revision === noteRevision) document.getElementById('widgetNoteStatus').textContent = 'Saved · Ctrl ↵ to make a task';
+  } catch {
+    document.getElementById('widgetNoteStatus').textContent = 'Could not save · click to retry';
+  } finally {
+    noteSaving = false;
+    if (revision !== noteRevision) saveWidgetNotes();
+  }
+}
+
+function captureWidgetNote() {
+  noteDrafts[today] = document.getElementById('widgetDailyNote').value.slice(0, 12000);
+  noteRevision += 1;
+  document.getElementById('widgetNoteStatus').textContent = 'Saving…';
+  clearTimeout(noteSaveTimer);
+  noteSaveTimer = setTimeout(saveWidgetNotes, 350);
+}
+
+async function widgetNoteToTask() {
+  const button = document.getElementById('widgetNoteToTask');
+  if (button.disabled) return;
+  const note = document.getElementById('widgetDailyNote');
+  const original = note.value;
+  const start = note.value.slice(0, note.selectionStart).lastIndexOf('\n') + 1;
+  const newline = note.value.indexOf('\n', note.selectionStart);
+  const end = newline < 0 ? note.value.length : newline;
+  const title = note.value.slice(start, end).trim().replace(/^[-*•]\s*/, '');
+  if (!title || title.length > 160) { showToast(title ? 'Shorten this line to 160 characters' : 'Choose a line in your notes first'); note.focus(); return; }
+  const task = normalizeTask({ id: `note-${Date.now()}-${Math.random().toString(16).slice(2)}`, title, priority: 'normal', date: today, createdAt: Date.now(), order: nextTaskOrder() });
+  tasks.push(task);
+  button.disabled = true;
+  try {
+    await persist('Task saved');
+  } catch {
+    tasks = tasks.filter((item) => item.id !== task.id);
+    showToast('Could not save. Your note is still here.');
+    return;
+  } finally {
+    button.disabled = false;
+  }
+  if (note.value === original) {
+    note.value = original.slice(0, start) + original.slice(newline < 0 ? end : end + 1);
+    captureWidgetNote();
+  }
+  render();
+  note.focus(); note.setSelectionRange(start, start);
+}
 
 function safeContentUrl(value) {
   try {
@@ -277,15 +337,17 @@ async function persist(message, action = null) {
 function render() {
   const target = settings.timeTarget;
   if (widgetMode === 'timeTarget' && !target) widgetMode = 'today';
+  document.body.dataset.mode = widgetMode;
   const visibleTasks = tasks
-    .filter((task) => !task.archived && (widgetMode === 'content' ? task.contentKind && !task.done : widgetMode === 'timeTarget' ? task.timeTargetId === target?.id : task.date === today))
+    .filter((task) => !task.archived && !task.deletedAt && (widgetMode === 'content' ? task.contentKind && !task.done : widgetMode === 'timeTarget' ? task.timeTargetId === target?.id : task.date === today))
     .sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
   const complete = visibleTasks.filter((task) => task.done).length;
   const percent = visibleTasks.length ? Math.round(complete / visibleTasks.length * 100) : 0;
-  document.querySelectorAll('[data-widget-mode]').forEach((button) => button.classList.toggle('active', button.dataset.widgetMode === widgetMode));
+  document.querySelectorAll('[data-widget-mode]').forEach((button) => { const active = button.dataset.widgetMode === widgetMode; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); });
   document.querySelector('[data-widget-mode="timeTarget"]').disabled = !target;
-  document.getElementById('dateLabel').textContent = widgetMode === 'content' ? 'YOUR SAVED STUFF' : widgetMode === 'timeTarget' ? 'ACTIVE TIME TARGET' : new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase();
-  document.getElementById('widgetHeading').textContent = widgetMode === 'content' ? 'Saved for later' : widgetMode === 'timeTarget' ? target.label : 'Today’s focus';
+  document.getElementById('dateLabel').textContent = widgetMode === 'content' ? 'TRAIL FINDS' : widgetMode === 'timeTarget' ? 'ACTIVE TIME TARGET' : new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase();
+  document.getElementById('widgetHeading').textContent = widgetMode === 'notes' ? 'Trail journal' : widgetMode === 'content' ? 'Trail finds' : widgetMode === 'timeTarget' ? target.label : 'Today’s trail';
+  document.getElementById('scoreValue').classList.toggle('hidden', widgetMode === 'notes');
   document.getElementById('scoreValue').textContent = `${percent}%`;
   document.getElementById('progressBar').style.width = `${percent}%`;
   document.getElementById('remainingLabel').textContent = widgetMode === 'content' ? `${visibleTasks.length} to explore` : visibleTasks.length - complete ? `${visibleTasks.length - complete} still open` : visibleTasks.length ? 'Everything complete' : 'Nothing pending';
@@ -296,6 +358,13 @@ function render() {
   document.getElementById('emptyCopy').textContent = widgetMode === 'content' ? 'Paste a link or save an idea above.' : widgetMode === 'timeTarget' ? 'Add the first to-do for this time period.' : 'Add today’s first task above.';
   emptyState.classList.toggle('hidden', visibleTasks.length !== 0);
   widgetList.classList.toggle('hidden', visibleTasks.length === 0);
+  const notesMode = widgetMode === 'notes';
+  document.getElementById('widgetNotes').classList.toggle('hidden', !notesMode);
+  document.getElementById('quickForm').classList.toggle('hidden', notesMode);
+  if (notesMode) { widgetList.classList.add('hidden'); emptyState.classList.add('hidden'); }
+  const note = document.getElementById('widgetDailyNote');
+  if (document.activeElement !== note) note.value = String(noteDrafts[today] || '');
+  if (notesMode) document.getElementById('remainingLabel').textContent = 'Your trail journal';
   widgetList.innerHTML = visibleTasks.map((task) => `<article class="widget-task ${task.done ? 'done' : ''} ${widgetMode === 'content' ? 'content-item' : ''}" data-id="${task.id}">
     <button class="check" data-action="toggle" aria-label="${task.done ? 'Reopen' : 'Complete'} task"><svg viewBox="0 0 24 24"><path d="m6 12 4 4 8-9"/></svg></button>
     <button class="task-title" data-action="edit" title="Click to edit">${escapeHtml(task.title)}</button>
@@ -303,6 +372,7 @@ function render() {
     <button class="delete" data-action="delete" aria-label="Delete task" title="Delete task"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></button>
   </article>`).join('');
   renderTargetClock();
+  window.workoUI?.refresh();
 }
 
 function renderTargetClock() {
@@ -410,7 +480,8 @@ document.querySelector('.widget-mode-switch').addEventListener('click', async (e
   widgetMode = button.dataset.widgetMode;
   settings = await window.tasknest.saveSettings({ widgetView: widgetMode });
   render();
-  quickInput.focus();
+  if (widgetMode === 'notes') document.getElementById('widgetDailyNote').focus();
+  else quickInput.focus();
 });
 
 widgetList.addEventListener('click', (event) => {
@@ -457,7 +528,8 @@ document.getElementById('removeWidget').addEventListener('click', () => window.t
 
 function applySettings(nextSettings) {
   settings = { ...settings, ...nextSettings };
-  widgetMode = settings.widgetView === 'content' ? 'content' : settings.widgetView === 'timeTarget' && settings.timeTarget ? 'timeTarget' : 'today';
+  if (!noteSaveTimer && !noteSaving) noteDrafts = settings.dailyNotes || {};
+  widgetMode = settings.widgetView === 'notes' ? 'notes' : settings.widgetView === 'content' ? 'content' : settings.widgetView === 'timeTarget' && settings.timeTarget ? 'timeTarget' : 'today';
   pinButton.classList.toggle('unpinned', !settings.widgetPinned);
   pinButton.title = settings.widgetPinned ? 'Stop keeping above other windows' : 'Keep above other windows';
   render();
@@ -488,7 +560,14 @@ setInterval(async () => {
 async function init() {
   tasks = prepareTasks(await window.tasknest.loadTasks());
   applySettings(await window.tasknest.loadSettings());
-  setTimeout(() => quickInput.focus(), 200);
+  setTimeout(() => widgetMode === 'notes' ? document.getElementById('widgetDailyNote').focus() : quickInput.focus(), 200);
 }
 
 init();
+
+document.getElementById('widgetDailyNote').addEventListener('input', captureWidgetNote);
+document.getElementById('widgetDailyNote').addEventListener('blur', saveWidgetNotes);
+document.getElementById('widgetDailyNote').addEventListener('keydown', (event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); widgetNoteToTask(); } });
+document.getElementById('widgetNoteToTask').addEventListener('click', widgetNoteToTask);
+document.getElementById('widgetNoteStatus').addEventListener('click', saveWidgetNotes);
+window.addEventListener('pagehide', saveWidgetNotes);

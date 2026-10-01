@@ -1,5 +1,5 @@
-const CACHE_NAME = 'worko-v2.4.6';
-const APP_SHELL = ['./index.html', './styles.css?v=2.4.6', './creative.css?v=2.4.6', './revamp.css?v=2.4.6', './night.css?v=2.4.6', './worko.css?v=2.4.6', './renderer.js?v=2.4.6', './assets/mountain-prayer-flags.png', './assets/worko-mark.svg', './assets/ridge-line.svg'];
+const CACHE_NAME = 'worko-v2.6.0';
+const APP_SHELL = ['./index.html', './worko-ui.css?v=2.6.0', './worko-ui.js?v=2.6.0', './assets/pahadi-weave.svg', './assets/trail-dots.svg', './worko.css?v=2.6.0', './renderer.js?v=2.6.0', './widget.html', './worko-widget.css?v=2.6.0', './widget.js?v=2.6.0', './assets/inter-latin.woff2', './assets/mountain-prayer-flags.png', './assets/worko-mark.svg', './assets/ridge-line.svg', './assets/frost-grain.svg', './assets/alpine-contours.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));

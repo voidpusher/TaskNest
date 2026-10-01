@@ -25,13 +25,13 @@ if (!window.tasknest) {
     saveWeeklyTargets: async (items) => write(keys.targets, items),
     loadProjects: async () => read(keys.projects, []),
     saveProjects: async (items) => write(keys.projects, items),
-    openWidget: async () => { const settings = { ...read(keys.settings, {}), widgetEnabled: true }; write(keys.settings, settings); return settings; },
+    openWidget: async () => { window.open('widget.html', 'worko-desk-widget', 'popup,width=390,height=600'); const settings = { ...read(keys.settings, {}), widgetEnabled: true }; write(keys.settings, settings); return settings; },
     removeWidget: async () => { const settings = { ...read(keys.settings, {}), widgetEnabled: false }; write(keys.settings, settings); return settings; },
-    onTasksChanged: () => {},
-    onWeeklyTargetsChanged: () => {},
-    onProjectsChanged: () => {},
+    onTasksChanged: (callback) => window.addEventListener('storage', (event) => { if (event.key === keys.tasks) callback(); }),
+    onWeeklyTargetsChanged: (callback) => window.addEventListener('storage', (event) => { if (event.key === keys.targets) callback(); }),
+    onProjectsChanged: (callback) => window.addEventListener('storage', (event) => { if (event.key === keys.projects) callback(); }),
     onReminderDue: () => {},
-    onWidgetSettings: () => {}
+    onWidgetSettings: (callback) => window.addEventListener('storage', (event) => { if (event.key === keys.settings) callback(read(keys.settings, {})); })
   };
 }
 
@@ -98,6 +98,113 @@ let voiceTimeoutTimer = null;
 let voiceFinishTimer = null;
 let focusTaskId = null;
 let recoveryTaskId = null;
+let dailyNotes = {};
+let dailyNoteTimer;
+let dailyNotesSaving = false;
+let dailyNotesVersion = 0;
+let deskTaskId = null;
+
+// The session is part of the desk, rather than buried in the planner drawer.
+$('sessionSlot').appendChild(document.querySelector('.time-target-card'));
+
+function setDeskTab(tab) {
+  $('focusCompanion').classList.toggle('hidden', tab !== 'focus');
+  $('sessionSlot').classList.toggle('hidden', tab !== 'session');
+  document.querySelectorAll('[data-desk-tab]').forEach((button) => button.setAttribute('aria-selected', String(button.dataset.deskTab === tab)));
+  window.workoUI?.refresh();
+  window.workoUI?.view($(tab === 'focus' ? 'focusCompanion' : 'sessionSlot'));
+}
+
+function renderDailyNote() {
+  const note = $('dailyNote');
+  if (note.dataset.date !== selectedDate || document.activeElement !== note) note.value = String(dailyNotes[selectedDate] || '');
+  note.dataset.date = selectedDate;
+  $('dailyNoteDate').textContent = formatDay(selectedDate, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+async function flushDailyNotes() {
+  clearTimeout(dailyNoteTimer);
+  dailyNoteTimer = null;
+  if (dailyNotesSaving) return;
+  dailyNotesSaving = true;
+  const version = dailyNotesVersion;
+  try {
+    await window.tasknest.saveSettings({ dailyNotes: { ...dailyNotes } });
+    if (version === dailyNotesVersion) $('dailyNoteStatus').textContent = 'Saved';
+  } catch {
+    $('dailyNoteStatus').textContent = 'Retry save';
+  } finally {
+    dailyNotesSaving = false;
+    if (version !== dailyNotesVersion) flushDailyNotes();
+  }
+}
+
+function captureDailyNote() {
+  const date = $('dailyNote').dataset.date || selectedDate;
+  dailyNotes[date] = $('dailyNote').value.slice(0, 12000);
+  dailyNotesVersion += 1;
+  $('dailyNoteStatus').textContent = 'Saving…';
+  clearTimeout(dailyNoteTimer);
+  dailyNoteTimer = setTimeout(flushDailyNotes, 350);
+}
+
+async function dailyLineToTask() {
+  if ($('noteToTask').disabled) return;
+  const note = $('dailyNote');
+  const original = note.value;
+  const before = note.value.slice(0, note.selectionStart);
+  const start = before.lastIndexOf('\n') + 1;
+  const endIndex = note.value.indexOf('\n', note.selectionStart);
+  const end = endIndex < 0 ? note.value.length : endIndex;
+  const title = note.value.slice(start, end).trim().replace(/^[-*•]\s*/, '');
+  if (!title) { showToast('Put the cursor on a note you want to make a task'); note.focus(); return; }
+  if (title.length > 160) { showToast('Shorten this line to 160 characters first'); note.focus(); return; }
+  const date = note.dataset.date || selectedDate;
+  const task = newTask(title, { date });
+  tasks.push(task);
+  $('noteToTask').disabled = true;
+  try {
+    await persist('Added to your day');
+  } catch {
+    tasks = tasks.filter((item) => item.id !== task.id);
+    showToast('Could not save the task. Your note is still here.');
+    return;
+  } finally {
+    $('noteToTask').disabled = false;
+  }
+  if (note.value === original && note.dataset.date === date) {
+    note.value = original.slice(0, start) + original.slice(endIndex < 0 ? end : end + 1);
+    note.setSelectionRange(start, start);
+    captureDailyNote();
+  }
+  render();
+  note.focus();
+}
+
+function renderDeskFocus() {
+  const available = sortedTasks(activeTasks().filter((task) => !task.done));
+  const select = $('companionTask');
+  const signature = available.map((task) => `${task.id}:${task.title}`).join('|');
+  if (select.dataset.signature !== signature) {
+    select.innerHTML = '<option value="">Choose a task</option>' + available.map((task) => `<option value="${escapeHtml(task.id)}">${escapeHtml(task.title)}</option>`).join('');
+    select.dataset.signature = signature;
+  }
+  let task = available.find((item) => item.id === deskTaskId);
+  if (!task) task = available.find((item) => item.activeSession) || todayPriorityTasks()[0] || available[0];
+  deskTaskId = task?.id || null;
+  select.value = deskTaskId || '';
+  const session = task?.activeSession;
+  const elapsed = sessionElapsed(task);
+  $('companionClock').textContent = formatClock(elapsed).replace(/^00:/, '');
+  $('companionState').textContent = session ? session.running ? 'On the climb' : 'Taking a breath' : 'One step at a time';
+  $('companionCaption').textContent = session ? `${formatCompactDuration((task.actualSeconds || 0) + elapsed)} total on this task` : task?.estimatedMinutes ? `${formatCompactDuration(task.estimatedMinutes * 60)} estimated` : 'Pick a task. Give it your attention.';
+  $('companionStart').innerHTML = session ? session.running ? 'Pause <span>Ⅱ</span>' : 'Resume <span>▶</span>' : 'Start climb <span>▶</span>';
+  $('companionStart').disabled = !task;
+  $('companionDetails').classList.toggle('hidden', !session);
+  $('companionFinish').classList.toggle('hidden', !session);
+  if (focusDialog.open) renderFocusClock(tasks.find((item) => item.id === focusTaskId));
+  window.workoUI?.refresh();
+}
 let focusTimerInterval = null;
 let focusNoteTimer = null;
 let activeReminder = null;
@@ -639,8 +746,13 @@ function setView(view) {
   selectionMode = false;
   selectedTaskIds.clear();
   setToolsOpen(false);
+  document.body.classList.remove('navigation-open');
+  $('navigationToggle').setAttribute('aria-expanded', 'false');
   render();
-  if (previousView !== view && view === 'content') $('contentPage').scrollTop = 0;
+  if (previousView !== view) {
+    document.querySelector('.workspace-content').scrollTop = 0;
+    window.workoUI?.view(document.querySelector('.workspace-content'));
+  }
 }
 
 function chooseDate(key) {
@@ -668,23 +780,21 @@ function setFilter(filter) {
 
 function headerContent() {
   const today = localDateKey(new Date());
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning.' : hour < 18 ? 'Good afternoon.' : 'Good evening.';
-  if (activeView === 'inbox') return ['INBOX', 'Capture first. Plan later.', 'Tasks without a due date stay safely in your inbox.'];
-  if (activeView === 'today') return [formatDay(today, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }), greeting, 'Here’s what needs your attention today.'];
+  if (activeView === 'inbox') return ['UNSCHEDULED TASKS', 'Basecamp', 'Capture a thought. Choose its trail when you’re ready.'];
+  if (activeView === 'today') return [formatDay(today, { weekday: 'long', month: 'long', day: 'numeric' }), 'Today’s trail', 'One step at a time. A little closer to your summit.'];
   if (activeView === 'date') return [formatDay(selectedDate, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }), formatDay(selectedDate, { weekday: 'long', month: 'long', day: 'numeric' }), 'Your saved plan and record for this day.'];
-  if (activeView === 'upcoming') return ['UPCOMING', 'What’s ahead.', 'All open tasks scheduled after today.'];
-  if (activeView === 'overdue') return ['OVERDUE', 'Needs a decision.', 'Complete these tasks or reschedule them to a realistic date.'];
-  if (activeView === 'completed') return ['COMPLETED', 'Your finished work.', 'A searchable record of everything you have completed.'];
+  if (activeView === 'upcoming') return ['UPCOMING TASKS', 'Horizon', 'See what’s ahead. Leave room for the journey.'];
+  if (activeView === 'overdue') return ['OVERDUE TASKS', 'Avalanche', 'No guilt. Find a new route for unfinished tasks.'];
+  if (activeView === 'completed') return ['COMPLETED TASKS', 'Summits', 'Look back at the steps that brought you here.'];
   if (activeView.startsWith('project:')) {
     const project = projectById(activeView.slice(8));
-    return ['PROJECT', project?.name || 'Unknown project', 'Every open and completed task in this project.'];
+    return ['EXPEDITION · PROJECT', project?.name || 'Unknown project', 'Every open and completed task in this project.'];
   }
   return ['TASKS', 'Your tasks.', 'Everything in one dependable place.'];
 }
 
 function taskDateLabel(task) {
-  if (!task.date) return 'Inbox';
+  if (!task.date) return 'Basecamp';
   const today = localDateKey(new Date());
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
   if (task.date === today) return 'Today';
@@ -764,7 +874,7 @@ function formatReminderLabel(task, reminder) {
 
 function taskMetaHtml(task) {
   const pieces = [];
-  pieces.push(`<span><span class="priority-dot ${task.priority}"></span>${task.priority === 'high' ? 'Important' : task.priority === 'low' ? 'Whenever' : 'Normal'}</span>`);
+  pieces.push(`<span><span class="priority-dot ${task.priority}"></span>${task.priority === 'high' ? 'Summit · high' : task.priority === 'low' ? 'Scenic · low' : 'Trail · normal'}</span>`);
   pieces.push(`<span>${escapeHtml(taskDateLabel(task))}${task.dueTime ? ` · ${escapeHtml(task.dueTime)}` : ''}</span>`);
   if (task.estimatedMinutes) pieces.push(`<span>${task.estimatedMinutes >= 60 ? `${task.estimatedMinutes / 60}h` : `${task.estimatedMinutes}m`}</span>`);
   const project = projectById(task.projectId);
@@ -774,7 +884,7 @@ function taskMetaHtml(task) {
   if (task.subtasks.length) pieces.push(`<span>${task.subtasks.filter((item) => item.done).length}/${task.subtasks.length} steps</span>`);
   if (task.contentKind) pieces.push(`<span class="content-task-meta">${{ video: '▶ Watch', article: '▤ Read', audio: '♫ Listen', idea: '✦ Idea' }[task.contentKind]}</span>`);
   if (task.contentUrl) pieces.push(`<button class="task-content-link" data-action="open-content" type="button" aria-label="Open saved link">Open link ↗</button>`);
-  if (task.weeklyTargetId) pieces.push('<span>Weekly target</span>');
+  if (task.weeklyTargetId) pieces.push('<span>Weekly ascent</span>');
   if (task.timeTargetId) pieces.push('<span>Time block</span>');
   if (task.actualSeconds) pieces.push(`<span>${formatCompactDuration(task.actualSeconds)} focused</span>`);
   if (task.activeSession) pieces.push(`<span class="focus-live-meta">${task.activeSession.running ? '● In focus' : 'Paused focus'}</span>`);
@@ -891,7 +1001,7 @@ function renderFocusDialog(task) {
   renderFocusClock(task);
 }
 
-function startFocus(task) {
+function startFocus(task, openSheet = true) {
   if (!task || task.done) return;
   const now = Date.now();
   for (const other of activeTasks().filter((item) => item.id !== task.id && item.activeSession?.running)) {
@@ -904,10 +1014,12 @@ function startFocus(task) {
   else if (!task.activeSession.running) { task.activeSession.running = true; task.activeSession.lastResumedAt = now; }
   touch(task);
   focusTaskId = task.id;
+  deskTaskId = task.id;
+  setDeskTab('focus');
   persist('Focus session started');
   render();
   renderFocusDialog(task);
-  if (!focusDialog.open) focusDialog.showModal();
+  if (openSheet && !focusDialog.open) focusDialog.showModal();
   clearInterval(focusTimerInterval);
   focusTimerInterval = setInterval(() => renderFocusClock(tasks.find((item) => item.id === focusTaskId)), 1000);
 }
@@ -927,6 +1039,7 @@ function toggleFocusPause() {
   persist(task.activeSession.running ? 'Focus resumed' : 'Focus paused');
   renderFocusClock(task);
   renderTodayCommand();
+  renderDeskFocus();
 }
 
 function finishFocusSession(completeTask = false) {
@@ -966,15 +1079,13 @@ function renderTaskList() {
     <article class="task-item ${task.done ? 'done' : ''} ${selectedTaskIds.has(task.id) ? 'selected' : ''}" data-id="${escapeHtml(task.id)}" draggable="${selectionMode ? 'false' : 'true'}">
       <label class="bulk-check-wrap" aria-label="Select ${escapeHtml(task.title)}"><input class="bulk-check" data-select-id="${escapeHtml(task.id)}" type="checkbox" ${selectedTaskIds.has(task.id) ? 'checked' : ''}><span></span></label>
       <button class="task-check" data-action="toggle" aria-label="${task.done ? 'Mark as open' : 'Mark as complete'}">${icon.check}</button>
-      <div class="task-copy" data-action="edit">
-        <span class="task-title" title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</span>
+      <div class="task-copy">
+        <button class="task-title" data-action="edit" type="button" title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</button>
         ${task.description ? `<span class="task-description">${escapeHtml(task.description)}</span>` : ''}
         <span class="task-meta">${taskMetaHtml(task)}</span>
       </div>
-      ${task.done ? '<span class="task-action-spacer"></span>' : `<button class="task-action phase-task-action ${task.activeSession?.running ? 'active' : ''}" data-action="${missed ? 'recover' : 'focus'}" aria-label="${missed ? 'Recover missed task' : 'Start focus mode'}" title="${missed ? 'Recover' : 'Focus'}">${missed ? icon.recover : icon.play}</button>`}
-      <button class="task-action duplicate-task" data-action="duplicate" aria-label="Duplicate task" title="Duplicate">${icon.copy}</button>
-      <button class="task-action edit-task" data-action="edit" aria-label="Edit task" title="Edit">${icon.edit}</button>
-      <button class="task-action delete-task" data-action="delete" aria-label="Delete task" title="Delete">${icon.trash}</button>
+      ${task.done ? '<span class="task-action-spacer"></span>' : `<button class="task-action phase-task-action ${task.activeSession?.running ? 'active' : ''}" data-action="${missed ? 'recover' : 'focus'}" aria-label="${missed ? 'Recover missed task' : 'Start focus mode'}" title="${missed ? 'Find a new route' : 'Climb · focus'}">${missed ? icon.recover : icon.play}</button>`}
+      <details class="task-menu"><summary aria-label="More actions for ${escapeHtml(task.title)}">···</summary><div class="task-menu-list"><button data-action="edit" type="button">${icon.edit} Edit task</button><button data-action="duplicate" type="button">${icon.copy} Duplicate</button><button class="delete-task" data-action="delete" type="button">${icon.trash} Delete</button></div></details>
       <span class="drag-handle" aria-label="Drag to reorder" title="Drag to reorder">${icon.drag}</span>
     </article>`;
   }).join('');
@@ -984,10 +1095,10 @@ function renderTaskList() {
   const heading = emptyState.querySelector('h3');
   const copy = emptyState.querySelector('p');
   if (searchQuery) { heading.textContent = 'No matching tasks'; copy.textContent = 'Try a different search phrase.'; }
-  else if (activeView === 'overdue') { heading.textContent = 'Nothing overdue'; copy.textContent = 'You are clear—keep it that way.'; }
-  else if (activeView === 'completed') { heading.textContent = 'No completed tasks'; copy.textContent = 'Finished work will collect here.'; }
-  else if (activeView === 'inbox') { heading.textContent = 'Inbox cleared'; copy.textContent = 'Unscheduled tasks will appear here.'; }
-  else if (activeView === 'today') { heading.textContent = 'A fresh page. Your move.'; copy.textContent = 'Add one thing above, however small.'; }
+  else if (activeView === 'overdue') { heading.textContent = 'A clear trail.'; copy.textContent = 'No overdue tasks. Take the next step at your own pace.'; }
+  else if (activeView === 'completed') { heading.textContent = 'Your first summit awaits.'; copy.textContent = 'Completed tasks collect here. Small steps count.'; }
+  else if (activeView === 'inbox') { heading.textContent = 'A quiet Basecamp.'; copy.textContent = 'Unscheduled tasks will appear here.'; }
+  else if (activeView === 'today') { heading.textContent = 'Room for a good day.'; copy.textContent = 'Add your first task above, or turn a note into one.'; }
   else { heading.textContent = 'No tasks here'; copy.textContent = 'Add one small thing or choose another view.'; }
 }
 
@@ -1148,7 +1259,7 @@ function renderTimeTarget() {
   $('resetTimeTarget').classList.toggle('hidden', !active);
   $('timeTargetWidgetButton').classList.toggle('hidden', !active);
   if (!active) {
-    $('timeTargetTitle').textContent = 'Set a focused window';
+    $('timeTargetTitle').textContent = 'Set your next trek';
     $('timeTargetTaskList').innerHTML = '';
     $('timeTargetTaskList').dataset.signature = '';
     $('timeTargetTaskProgress').textContent = '0 / 0 done';
@@ -1158,7 +1269,7 @@ function renderTimeTarget() {
   const remainingSeconds = Math.max(0, Math.ceil((timeTarget.endsAt - now) / 1000));
   const elapsedSeconds = Math.max(0, timeTarget.durationSeconds - remainingSeconds);
   const progress = Math.min(100, Math.round(elapsedSeconds / Math.max(1, timeTarget.durationSeconds) * 100));
-  $('timeTargetTitle').textContent = timeTarget.label || 'Focused window';
+  $('timeTargetTitle').textContent = timeTarget.label || 'Trek window';
   $('timeTargetRemaining').textContent = remainingSeconds ? formatClock(remainingSeconds) : 'Complete';
   $('timeTargetEnds').textContent = remainingSeconds ? `Ends at ${formatClockTime(timeTarget.endsAt)}` : `Finished at ${formatClockTime(timeTarget.endsAt)}`;
   $('timeTargetBar').style.width = `${progress}%`;
@@ -1166,7 +1277,7 @@ function renderTimeTarget() {
   if (!remainingSeconds && !timeTarget.notifiedAt) {
     timeTarget.notifiedAt = now;
     saveTimeTarget('Time target complete');
-    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('Time target complete', { body: `${timeTarget.label || 'Focused window'} is finished.`, icon: 'assets/worko-mark.svg' });
+    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('Time target complete', { body: `${timeTarget.label || 'Trek window'} is finished.`, icon: 'assets/worko-mark.svg' });
   }
 }
 
@@ -1279,7 +1390,14 @@ function renderProjects() {
   }).join('');
   projectGrid.querySelectorAll('[data-color]').forEach((dot) => { dot.style.background = dot.dataset.color; });
   const options = activeProjects.map((project) => `<option value="${escapeHtml(project.id)}">${escapeHtml(project.name)}</option>`).join('');
-  $('editProject').innerHTML = `<option value="">No project</option>${options}`;
+  const projectSelect = $('editProject');
+  const projectOptions = `<option value="">No expedition</option>${options}`;
+  if (projectSelect.dataset.options !== projectOptions) {
+    const selectedProject = projectSelect.value;
+    projectSelect.innerHTML = projectOptions;
+    projectSelect.value = activeProjects.some(project => project.id === selectedProject) ? selectedProject : '';
+    projectSelect.dataset.options = projectOptions;
+  }
 }
 
 function renderBulkBar() {
@@ -1338,7 +1456,10 @@ function render() {
   renderTimeTarget();
   renderReminderCard();
   renderBulkBar();
-  $('taskListHeading').textContent = activeView === 'today' ? 'All today’s tasks' : activeView === 'overdue' ? 'Missed tasks' : 'Tasks';
+  renderDailyNote();
+  renderDeskFocus();
+  $('taskListHeading').textContent = activeView === 'today' ? 'Steps for today' : activeView === 'overdue' ? 'Tasks to reroute' : 'Tasks';
+  window.workoUI?.refresh();
 }
 
 function defaultQuickTaskOverrides() {
@@ -1353,7 +1474,7 @@ function addQuickTask(title, priority = 'normal') {
   if (!cleanTitle) return taskInput.focus();
   const task = newTask(cleanTitle, { ...defaultQuickTaskOverrides(), priority });
   tasks.push(task);
-  persist(task.date ? `Saved for ${formatDay(task.date, { month: 'short', day: 'numeric' })}` : 'Saved to Inbox');
+  persist(task.date ? `Saved for ${formatDay(task.date, { month: 'short', day: 'numeric' })}` : 'Saved to Basecamp');
   activeFilter = 'all';
   render();
 }
@@ -1481,8 +1602,8 @@ voiceLanguage.addEventListener('change', () => {
   setVoiceStatus(`Ready for ${voiceLanguageName()}`, 'idle');
 });
 $('newTaskButton').addEventListener('click', () => openEditor());
-$('saveContentButton').addEventListener('click', () => { setView('content'); $('contentTitle').focus(); });
-$('heroContentButton').addEventListener('click', () => { setView('content'); $('contentTitle').focus(); });
+$('saveContentButton').addEventListener('click', () => { setView('content'); $('contentComposer').open = true; $('contentTitle').focus(); });
+$('heroContentButton').addEventListener('click', () => { setView('content'); $('contentComposer').open = true; $('contentTitle').focus(); });
 $('contentForm').addEventListener('submit', (event) => {
   event.preventDefault();
   const rawUrl = $('contentUrl').value.trim();
@@ -1679,7 +1800,7 @@ recoveryDialog.addEventListener('click', (event) => {
   }
   if (action === 'backlog') {
     task.date = null; task.dueTime = null; task.reminders = []; task.reminderAt = null;
-    return completeRecovery(task, 'Moved to Inbox backlog');
+    return completeRecovery(task, 'Moved to Basecamp backlog');
   }
   if (action === 'subtasks') {
     recoveryDialog.close();
@@ -1961,7 +2082,7 @@ $('toolsBackdrop').addEventListener('click', () => setToolsOpen(false));
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && document.body.classList.contains('tools-open')) { setToolsOpen(false); return; }
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); taskInput.focus(); taskInput.select(); }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); if ($('taskView').classList.contains('hidden')) setView('today'); taskInput.focus(); taskInput.select(); }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 't') { event.preventDefault(); setView('today'); }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') { event.preventDefault(); searchInput.focus(); searchInput.select(); }
   if (event.key === 'Escape' && selectionMode) { selectionMode = false; selectedTaskIds.clear(); render(); }
@@ -1975,7 +2096,68 @@ window.tasknest.onReminderDue((payload) => {
   const reminder = task?.reminders.find((item) => item.id === payload?.reminderId);
   if (task && reminder) presentReminder(task, reminder, payload.dueAt || effectiveReminderAt(task, reminder));
 });
-window.tasknest.onWidgetSettings((settings) => { widgetEnabled = settings.widgetEnabled; renderWidgetCard(); });
+window.tasknest.onWidgetSettings((settings) => {
+  widgetEnabled = settings.widgetEnabled;
+  timeTarget = settings.timeTarget || null;
+  if (settings.dailyNotes && !dailyNotesSaving && !dailyNoteTimer) { dailyNotes = settings.dailyNotes; renderDailyNote(); }
+  renderWidgetCard(); renderTimeTarget();
+});
+
+document.querySelector('.desk-tabs').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-desk-tab]');
+  if (button) setDeskTab(button.dataset.deskTab);
+});
+document.querySelector('.desk-tabs').addEventListener('keydown', (event) => {
+  if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+  event.preventDefault();
+  const tab = event.key === 'ArrowRight' ? 'session' : 'focus';
+  setDeskTab(tab);
+  $(tab === 'session' ? 'deskSessionTab' : 'deskFocusTab').focus();
+});
+$('companionTask').addEventListener('change', () => { deskTaskId = $('companionTask').value; renderDeskFocus(); });
+$('companionStart').addEventListener('click', () => {
+  const task = tasks.find((item) => item.id === deskTaskId);
+  if (!task) return;
+  if (task.activeSession?.running) { focusTaskId = task.id; toggleFocusPause(); }
+  else startFocus(task, false);
+});
+$('companionDetails').addEventListener('click', () => {
+  const task = tasks.find((item) => item.id === deskTaskId);
+  if (!task) return;
+  focusTaskId = task.id;
+  renderFocusDialog(task);
+  if (!focusDialog.open) focusDialog.showModal();
+});
+$('companionFinish').addEventListener('click', () => { focusTaskId = deskTaskId; finishFocusSession(); });
+$('dailyNote').addEventListener('input', captureDailyNote);
+$('dailyNote').addEventListener('blur', flushDailyNotes);
+$('dailyNote').addEventListener('keydown', (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); dailyLineToTask(); }
+});
+$('noteToTask').addEventListener('click', dailyLineToTask);
+$('dailyNoteStatus').addEventListener('click', flushDailyNotes);
+$('deskLibrary').addEventListener('click', () => setView('content'));
+$('deskToggle').addEventListener('click', () => {
+  const open = document.body.classList.toggle('desk-open');
+  $('deskToggle').setAttribute('aria-expanded', String(open));
+});
+$('navigationToggle').addEventListener('click', () => {
+  const open = document.body.classList.toggle('navigation-open');
+  $('navigationToggle').setAttribute('aria-expanded', String(open));
+});
+voiceButton.addEventListener('click', () => document.body.classList.add('voice-active'));
+document.addEventListener('click', (event) => {
+  document.querySelectorAll('.task-menu[open]').forEach((menu) => { if (!menu.contains(event.target)) menu.open = false; });
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    document.body.classList.remove('desk-open', 'navigation-open', 'voice-active');
+    $('deskToggle').setAttribute('aria-expanded', 'false');
+    $('navigationToggle').setAttribute('aria-expanded', 'false');
+    document.querySelectorAll('.task-menu[open]').forEach((menu) => { menu.open = false; });
+  }
+});
+window.addEventListener('pagehide', flushDailyNotes);
 
 async function init() {
   const savedVoiceLanguage = localStorage.getItem(VOICE_LANGUAGE_KEY);
@@ -1989,13 +2171,14 @@ async function init() {
   projects = savedProjects;
   widgetEnabled = settings.widgetEnabled;
   timeTarget = settings.timeTarget || null;
+  dailyNotes = settings.dailyNotes && typeof settings.dailyNotes === 'object' ? settings.dailyNotes : {};
   $('bulkDate').value = selectedDate;
   render();
   if (document.documentElement.classList.contains('web-runtime') && 'serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(() => {});
   clearInterval(reminderCheckTimer);
   reminderCheckTimer = setInterval(checkClientReminders, 15000);
   clearInterval(timeTargetTimer);
-  timeTargetTimer = setInterval(renderTimeTarget, 1000);
+  timeTargetTimer = setInterval(() => { renderTimeTarget(); renderDeskFocus(); }, 1000);
   checkClientReminders();
   setTimeout(() => taskInput.focus(), 200);
 }

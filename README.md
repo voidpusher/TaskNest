@@ -5,18 +5,32 @@ Worko is a private Windows daily planner with a separate, resizable desktop widg
 ## Install
 
 1. Open the `dist` folder.
-2. Run `Worko-Setup-2.4.6.exe`.
+2. Run `Worko-Setup-2.6.0.exe`.
 3. Choose an install location. The installer creates a desktop shortcut.
+
+## Worko 2.6 trail workspace
+
+The redesigned workspace separates a quiet task list from a compact mountain hut with **Climb** (Focus) and **Trek** (time-target) tabs. Trail journal notes are saved by date; press **Ctrl + Enter** on a line to turn it into a task. The matching widget has **Trail**, **Trek**, **Journal**, and **Finds** modes. Notes and tasks synchronize between the planner and widget on the same device/storage origin.
+
+Version 2.5.1 adds Himalayan-tinted frost: sage task surfaces, lavender focus controls, glacier-toned sessions, and stone-coloured notepads inside a charcoal frame. A fine procedural grain and original mountain photograph add texture without obscuring task text. Mountain contours move subtly, with a static reduced-motion alternative.
+
+Version 2.6 adds custom floating dropdowns across the app, with keyboard navigation, type-to-find, clear selected states, and native-select fallbacks. Segmented controls glide between modes, dialog sheets settle in and out, and completion checks have a short spring response. Reduced motion disables these effects. Existing saved data and native change events are preserved.
+
+The trail vocabulary is consistent: **Basecamp** (Inbox), **Today’s trail** (Today), **Horizon** (Upcoming), **Avalanche** (Overdue), **Summits** (Completed), **Weekly ascent** (Weekly targets), **Expeditions** (Projects), **Trail finds** (saved content), **Climb** (Focus) and **Trek** (time targets). Tooltips, page subtitles and the “Behind the trail” glossary explain the mappings.
+
+Original, non-sacred geometric borders draw inspiration from [Kullu weaving in Himachal Pradesh](https://himachaltourism.gov.in/destination/ethnic/). Fine line-and-dot journal details draw inspiration from [Kumaon’s Aipan tradition in Uttarakhand](https://www.incredibleindia.gov.in/en/uttarakhand/aipan-the-vibrant-folk-art-of-uttarakhand). These are contemporary UI interpretations, not reproductions of ceremonial artwork or claims of regional authenticity.
+
+The macOS-inspired material is implemented in CSS, not Apple's native Liquid Glass framework. Inter is bundled locally for offline use, and reduced-motion/transparency preferences are respected. Existing TaskNest storage keys, task fields, and Windows data locations are unchanged.
 
 ## Use
 
 - Choose a date, type a task, and press Enter or the **Add** button. Every task is saved under that date.
-- The home screen puts quick add and the task list first. Open **Plan your day** for priorities and missed-task recovery, or **Calendar & tools** for scheduling, time targets, and reminders.
+- The home screen puts quick add and the task list first. Open **Chart your trail** for priorities and missed-task recovery, **Trek** for time targets, or **Trail map** for the calendar and reminders.
 - Click the microphone beside the task field, speak naturally, review the transcription, and press **Add**. Voice entry is available in both the planner and desktop widget.
 - Use **Inbox**, **Today**, **Upcoming**, **Overdue**, and **Completed** to manage tasks by state and schedule.
 - Open a task to add a description, status, due time, estimate, project, subtasks, recurrence, and multiple reminders.
 - Drag task rows to reorder them, or use **Select** to complete, move, or delete several tasks together.
-- Duplicate any task from its copy action. Deleted tasks can be restored immediately with **Undo**.
+- Duplicate, edit, or delete a task from its **···** menu. Deleted tasks can be restored immediately with **Undo**.
 - Repeat tasks daily, weekly, monthly, on selected weekdays, or on a custom interval. Completing one automatically creates exactly one next occurrence.
 - Add several alerts before a deadline or at exact times. Due alerts can be completed, dismissed, or snoozed for 10 minutes.
 - The installed Windows app remains available in the system tray so reminders continue while its main window is closed, and starts quietly with Windows whenever reminder tasks exist.
@@ -28,7 +42,7 @@ Worko is a private Windows daily planner with a separate, resizable desktop widg
 - Open **Weekly targets** to create a recurring goal such as “Deep work — 3 days.”
 - Add a weekly target to the selected day to create a linked daily task. Completing that task automatically updates the weekly progress, and the task also appears in the desktop widget.
 - Click the square beside a task to complete it.
-- Use the pencil button—or double-click a task—to edit its name, priority, or date.
+- Click a task's title to edit its name, priority, date, and other details.
 - Deleted tasks can be restored immediately with **Undo**.
 - Use **All**, **Open**, and **Done** to filter the list.
 - **Hide completed** keeps finished tasks in your daily record without cluttering the list.

@@ -413,7 +413,7 @@ function readSettings() {
     durationSeconds: Math.max(60, Math.round(Number(raw.timeTarget.durationSeconds) || (Number(raw.timeTarget.endsAt) - Number(raw.timeTarget.startedAt)) / 1000)),
     notifiedAt: Number(raw.timeTarget.notifiedAt) || null
   } : null;
-  return { ...raw, widgetView: ['today', 'timeTarget', 'content'].includes(raw.widgetView) ? raw.widgetView : 'today', timeTarget: target };
+  return { ...raw, widgetView: ['today', 'timeTarget', 'content', 'notes'].includes(raw.widgetView) ? raw.widgetView : 'today', timeTarget: target };
 }
 
 function saveSettings(update) {

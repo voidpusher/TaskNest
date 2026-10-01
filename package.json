@@ -1,6 +1,6 @@
 {
   "name": "tasknest",
-  "version": "2.4.6",
+  "version": "2.6.0",
   "description": "Worko, a focused daily planner with a resizable desktop widget.",
   "main": "main.js",
   "author": "Worko",
@@ -30,6 +30,8 @@
       "revamp.css",
       "night.css",
       "worko.css",
+      "worko-ui.css",
+      "worko-ui.js",
       "renderer.js",
       "widget.html",
       "widget.css",

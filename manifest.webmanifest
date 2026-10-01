@@ -1,11 +1,11 @@
 {
   "name": "Worko",
   "short_name": "Worko",
-  "description": "A calm daily planner with focus sessions, recurrence, and reminders.",
+  "description": "Tasks, focus sessions and daily notes, together on your desktop.",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#111214",
-  "theme_color": "#111214",
+  "background_color": "#151719",
+  "theme_color": "#151719",
   "icons": [
     {
       "src": "assets/worko-mark.svg",

@@ -7,81 +7,81 @@
   <title>Worko</title>
   <link rel="icon" type="image/svg+xml" href="assets/worko-mark.svg">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=2.4.6">
-  <link rel="stylesheet" href="creative.css?v=2.4.6">
-  <link rel="stylesheet" href="revamp.css?v=2.4.6">
-  <link rel="stylesheet" href="night.css?v=2.4.6">
-  <link rel="stylesheet" href="worko.css?v=2.4.6">
+  <link rel="stylesheet" href="worko.css?v=2.6.0">
+  <link rel="stylesheet" href="worko-ui.css?v=2.6.0">
 </head>
 <body>
   <header class="titlebar">
-    <div class="brand" aria-label="Worko"><img class="brand-logo" src="assets/worko-mark.svg" alt=""><span class="brand-name">worko<span class="brand-period">.</span></span></div>
-    <div class="drag-space"></div>
+    <button class="navigation-toggle" id="navigationToggle" type="button" aria-label="Toggle navigation" aria-expanded="false"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="4"/><path d="M9 4v16"/></svg></button><div class="brand" aria-label="Worko"><img class="brand-logo" src="assets/worko-mark.svg" alt=""><span class="brand-name">worko</span></div>
+    <span class="terrain-signature"><svg viewBox="0 0 40 24" aria-hidden="true"><path d="m1 22 11-13 6 7L27 2l12 20M22 9l5-7 5 8M8 13l4-4 4 5"/></svg>Himalayan workspace</span><div class="drag-space"></div>
     <span class="save-status"><span></span>Saved</span>
-    <button class="title-tools-button" id="titleToolsButton" type="button" aria-controls="plannerTools" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></svg>Calendar &amp; tools</button>
+    <button class="title-tools-button" id="titleToolsButton" type="button" aria-controls="plannerTools" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="4"/><path d="M7 3v4M17 3v4M3 10h18"/></svg>Trail map</button>
     <button class="title-widget-button" id="titleWidgetButton" title="Put today on desktop"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h5"/></svg>Widget</button>
   </header>
 
   <main class="app-shell">
     <aside class="sidebar panel-surface">
       <button class="new-task-cta" id="newTaskButton" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New task</button>
-      <button class="save-content-cta" id="saveContentButton" type="button"><span aria-hidden="true">↗</span> Save something</button>
+      <button class="save-content-cta" id="saveContentButton" type="button"><span aria-hidden="true">↗</span> Save an idea</button>
       <nav class="side-nav" aria-label="Task views">
-        <button class="nav-item" data-view="inbox" type="button"><svg viewBox="0 0 24 24"><path d="M4 6h16v13H4zM4 14h5l2 3h2l2-3h5"/></svg>Inbox<span class="nav-count" id="inboxCount">0</span></button>
-        <button class="nav-item active" data-view="today" id="sidebarToday" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>Today<span class="nav-count" id="todayCount">0</span></button>
-        <button class="nav-item" data-view="upcoming" type="button"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Upcoming<span class="nav-count" id="upcomingCount">0</span></button>
-        <button class="nav-item" data-view="overdue" type="button"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5M12 17h.01"/></svg>Overdue<span class="nav-count danger" id="overdueCount">0</span></button>
-        <button class="nav-item" data-view="completed" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>Completed<span class="nav-count" id="completedCount">0</span></button>
-        <button class="nav-item" data-view="weekly" id="weeklyTargetsButton" type="button"><svg viewBox="0 0 24 24"><path d="M5 5v14h14M8 15l3-3 3 2 4-5"/></svg>Weekly targets<span class="nav-count" id="weeklyTargetsBadge">New</span></button>
-        <button class="nav-item" data-view="projects" type="button"><svg viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v10H3z"/></svg>Projects<span class="nav-count" id="projectsCount">0</span></button>
-        <button class="nav-item" data-view="content" type="button"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM9 9l7 3-7 3z"/></svg>Content<span class="nav-count" id="contentCount">0</span></button>
+        <button class="nav-item" data-view="inbox" title="Basecamp · unscheduled tasks" type="button"><svg viewBox="0 0 24 24"><path d="M3 20 12 4l9 16H3Zm5 0 4-8 4 8M12 4V2M12 2h5l-2 2"/></svg>Basecamp<span class="nav-count" id="inboxCount">0</span></button>
+        <button class="nav-item active" data-view="today" id="sidebarToday" title="Today’s trail · tasks for today" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>Today’s trail<span class="nav-count" id="todayCount">0</span></button>
+        <button class="nav-item" data-view="upcoming" title="Horizon · upcoming tasks" type="button"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Horizon<span class="nav-count" id="upcomingCount">0</span></button>
+        <span class="nav-section-label">YOUR TERRAIN</span>
+        <button class="nav-item" data-view="overdue" title="Avalanche · overdue tasks" type="button"><svg viewBox="0 0 24 24"><path d="M2 20 11 4l11 16H2M7 11l4-7 4 7M14 13l4 3M12 16l3 3"/></svg>Avalanche<span class="nav-count danger" id="overdueCount">0</span></button>
+        <button class="nav-item" data-view="completed" title="Summits · completed tasks" type="button"><svg viewBox="0 0 24 24"><path d="m3 21 8-12 8 12M8 14l3-5 3 5M11 9V2h8l-3 3 3 3h-8"/></svg>Summits<span class="nav-count" id="completedCount">0</span></button>
+        <button class="nav-item" data-view="weekly" id="weeklyTargetsButton" title="Weekly ascent · weekly targets" type="button"><svg viewBox="0 0 24 24"><path d="M5 5v14h14M8 15l3-3 3 2 4-5"/></svg>Weekly ascent<span class="nav-count" id="weeklyTargetsBadge">New</span></button>
+        <button class="nav-item" data-view="projects" title="Expeditions · projects" type="button"><svg viewBox="0 0 24 24"><path d="M2 20 9 7l5 9 3-5 5 9H2M6 13l3-6 3 6M9 7V3h5l-2 2"/></svg>Expeditions<span class="nav-count" id="projectsCount">0</span></button>
+        <button class="nav-item" data-view="content" title="Trail finds · saved content and ideas" type="button"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM9 9l7 3-7 3z"/></svg>Trail finds<span class="nav-count" id="contentCount">0</span></button>
       </nav>
       <div class="side-divider"></div>
-      <section class="history-block"><div class="history-heading"><span>RECENT DAYS</span><span>Your record</span></div><div class="history-list" id="historyList"></div></section>
+      <details class="history-block"><summary>Trail log</summary><div class="history-list" id="historyList"></div></details>
+      <details class="craft-note"><summary>Behind the trail</summary><p>A quieter rhythm, from the hills. Original woven borders nod to Himachal’s Kullu textiles; fine line-and-dot details nod to Kumaon’s Aipan tradition.</p><p><a href="https://himachaltourism.gov.in/destination/ethnic/" target="_blank" rel="noopener noreferrer">Kullu weaving ↗</a> · <a href="https://www.incredibleindia.gov.in/en/uttarakhand/aipan-the-vibrant-folk-art-of-uttarakhand" target="_blank" rel="noopener noreferrer">Aipan ↗</a></p><dl class="trail-glossary"><dt>Basecamp / Horizon</dt><dd>Unscheduled / upcoming tasks</dd><dt>Avalanche / Summits</dt><dd>Overdue / completed tasks</dd><dt>Ascent / Expeditions</dt><dd>Weekly targets / projects</dd><dt>Climb / Trek</dt><dd>Focus timer / time targets</dd></dl></details>
       <div class="sidebar-tip"><span class="tip-key">Ctrl K</span><span>Quick add</span></div>
     </aside>
 
     <section class="workspace panel-surface">
-      <div class="search-row"><label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg><input id="searchInput" autocomplete="off" placeholder="Search tasks..." aria-label="Search tasks"><span>Ctrl F</span></label></div>
+      <div class="search-row"><label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg><input id="searchInput" autocomplete="off" placeholder="Search your tasks" aria-label="Search tasks"><span>Ctrl F</span></label><button class="desk-toggle" id="deskToggle" type="button" aria-expanded="false">Desk</button></div>
       <div class="workspace-content">
         <section id="taskView" class="task-view">
           <div class="day-header"><div><p class="eyebrow" id="selectedDayLabel">TODAY</p><h1 id="greetingTitle">Good morning.</h1><p class="day-subtitle" id="listTitle">Here’s what needs your attention today.</p><button class="hero-content-link" id="heroContentButton" type="button">Save a video, article or idea <span aria-hidden="true">↗</span></button></div><div class="header-progress"><span id="progressCount">0 of 0 completed</span><div class="progress-track"><span id="progressBar"></span></div></div></div>
-          <form class="task-form" id="taskForm"><svg class="form-plus" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><input id="taskInput" maxlength="160" autocomplete="off" placeholder="What do you want to get done?" aria-label="New task"><select id="priorityInput" aria-label="Priority"><option value="normal">Normal</option><option value="high">Important</option><option value="low">Whenever</option></select><button class="voice-button" id="voiceButton" type="button" aria-label="Add task with your voice" aria-pressed="false" title="Speak a task"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7"/></svg><span class="voice-pulse" aria-hidden="true"></span></button><button class="add-button" type="submit" aria-label="Add task">Add<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></form>
+          <form class="task-form" id="taskForm"><svg class="form-plus" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><input id="taskInput" maxlength="160" autocomplete="off" placeholder="What do you want to get done?" aria-label="New task"><select id="priorityInput" aria-label="Priority"><option value="normal">Trail · normal</option><option value="high">Summit · high</option><option value="low">Scenic · low</option></select><button class="voice-button" id="voiceButton" type="button" aria-label="Add task with your voice" aria-pressed="false" title="Speak a task"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7"/></svg><span class="voice-pulse" aria-hidden="true"></span></button><button class="add-button" type="submit" aria-label="Add task">Add<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></form>
           <div class="voice-assist" id="voiceAssist"><span class="voice-status" id="voiceStatus" aria-live="polite"><i aria-hidden="true"></i>Tap the mic and speak naturally</span><label class="voice-language">Voice language<select id="voiceLanguage" aria-label="Voice recognition language"><option value="auto">Auto</option><option value="en-IN">English / Hinglish (India)</option><option value="hi-IN">Hindi (India)</option><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option></select></label></div>
           <div class="list-toolbar"><div class="list-heading"><span id="taskListHeading">Tasks</span><span class="list-heading-actions"><span id="remainingLabel">Nothing pending</span><button id="bulkToggle" class="text-button" type="button">Select</button></span></div><div class="filter-group" aria-label="Filter tasks"><button class="filter active" data-filter="all">All</button><button class="filter" data-filter="active">Open</button><button class="filter" data-filter="done">Done</button></div></div>
           <div class="bulk-bar hidden" id="bulkBar"><strong id="bulkCount">0 selected</strong><button data-bulk-action="complete" type="button">Complete</button><label>Move to <input id="bulkDate" type="date" aria-label="Move selected tasks to date"></label><button data-bulk-action="move" type="button">Move</button><button class="bulk-delete" data-bulk-action="delete" type="button">Delete</button><button class="bulk-cancel" data-bulk-action="cancel" type="button">Cancel</button></div>
           <div class="task-list" id="taskList" aria-live="polite"></div>
           <div class="empty-state hidden" id="emptyState"><div class="empty-mark" aria-hidden="true"><svg class="empty-ridge" viewBox="0 0 180 72"><path class="ridge-back" d="M2 59 28 34l16 13 23-29 22 31 15-18 20 22 22-25 32 31"/><path class="ridge-front" d="M2 67 34 48l17 9 28-39 17 25 15-10 28 25 17-13 22 22"/><path class="ridge-snow" d="m67 34 12-16 10 15m48 11 9-16 8 12"/></svg></div><h3>No tasks here</h3><p>Add one small thing or choose another view.</p></div>
           <footer class="task-footer"><span>Changes are saved automatically</span><button id="clearButton" class="text-button" type="button">Hide completed</button></footer>
-          <details class="planning-panel hidden" id="planningPanel"><summary><span class="planning-summary-label"><img src="assets/ridge-line.svg" alt="">Plan your day</span><span id="planningSummary">Your priorities, workload and missed tasks</span><span class="planning-chevron" aria-hidden="true">⌄</span></summary><section class="today-command hidden" id="todayCommand" aria-label="Today overview">
+          <details class="planning-panel hidden" id="planningPanel"><summary><span class="planning-summary-label"><img src="assets/ridge-line.svg" alt="">Chart your trail</span><span id="planningSummary">Your priorities, workload and missed tasks</span><span class="planning-chevron" aria-hidden="true">⌄</span></summary><section class="today-command hidden" id="todayCommand" aria-label="Today overview">
             <div class="today-metrics">
               <div class="today-metric"><span>Workload</span><strong id="todayWorkload">0m</strong><small id="todayWorkloadNote">No estimates yet</small></div>
               <div class="today-metric"><span>Remaining</span><strong id="todayRemaining">0</strong><small>tasks for today</small></div>
-              <button class="today-metric today-metric-button" data-today-action="overdue" type="button"><span>Overdue</span><strong id="todayOverdueCount">0</strong><small>review missed work →</small></button>
+              <button class="today-metric today-metric-button" data-today-action="overdue" type="button"><span>Avalanche</span><strong id="todayOverdueCount">0</strong><small>review missed work →</small></button>
               <div class="today-metric"><span>Progress</span><strong id="todayProgress">0%</strong><small id="todayProgressNote">Start with one win</small></div>
             </div>
             <div class="today-lanes">
               <section class="today-lane priority-lane"><header><div><span class="lane-kicker">DO NEXT</span><strong>Top three priorities</strong></div><span id="topPriorityCount">0 selected</span></header><div class="priority-queue" id="topPriorityList"></div></section>
-              <section class="today-lane recovery-lane"><header><div><span class="lane-kicker">RECOVER</span><strong>Missed tasks</strong></div><button data-today-action="overdue" type="button">View all</button></header><div class="today-overdue-list" id="todayOverdueList"></div></section>
+              <section class="today-lane recovery-lane"><header><div><span class="lane-kicker">RECOVER</span><strong>Find a new route</strong></div><button data-today-action="overdue" type="button">View all</button></header><div class="today-overdue-list" id="todayOverdueList"></div></section>
             </div>
           </section></details>
         </section>
 
         <section class="special-page hidden" id="weeklyPage">
-          <div class="special-header"><div><p class="eyebrow">WEEKLY TARGETS</p><h1>Build consistency.</h1><p class="day-subtitle" id="weeklyRangeLabel">This week</p></div><div class="special-stat"><strong id="weeklyPagePercent">0%</strong><span>weekly progress</span></div></div>
+          <div class="special-header"><div><p class="eyebrow">WEEKLY TARGETS</p><h1>Your weekly ascent.</h1><p class="day-subtitle" id="weeklyRangeLabel">This week</p></div><div class="special-stat"><strong id="weeklyPagePercent">0%</strong><span>weekly progress</span></div></div>
           <form class="weekly-target-form" id="weeklyTargetForm"><label><span>What do you want to repeat?</span><input id="weeklyTargetTitle" maxlength="80" autocomplete="off" placeholder="Study, work out, meditate…" required></label><label class="weekly-count-field"><span>Days per week</span><select id="weeklyTargetCount" aria-label="Target days per week"><option value="1">1 day</option><option value="2">2 days</option><option value="3" selected>3 days</option><option value="4">4 days</option><option value="5">5 days</option><option value="6">6 days</option><option value="7">Every day</option></select></label><button class="weekly-add-button" type="submit">Create target</button></form>
           <div class="weekly-explainer"><span class="weekly-link-mark">↗</span>Add a target to the selected calendar day. It becomes a normal task and updates weekly progress when completed.</div>
           <div class="weekly-target-list weekly-page-list" id="weeklyTargetList"></div><div class="weekly-empty" id="weeklyEmpty"><strong>No weekly targets yet</strong><span>Create one above—“Walk” 4 days is a good start.</span></div>
         </section>
 
         <section class="special-page hidden" id="projectsPage">
-          <div class="special-header"><div><p class="eyebrow">PROJECTS</p><h1>Keep work together.</h1><p class="day-subtitle">Create a project, then assign tasks from their detail panel.</p></div><div class="special-stat"><strong id="projectTaskTotal">0</strong><span>open tasks</span></div></div>
-          <form class="project-form" id="projectForm"><input id="projectName" maxlength="60" autocomplete="off" placeholder="New project name" required><input id="projectColor" type="color" value="#aeb9bb" aria-label="Project color"><button type="submit">Create project</button></form>
-          <div class="project-grid" id="projectGrid"></div><div class="project-empty" id="projectEmpty"><strong>No projects yet</strong><span>Create a project to group related tasks.</span></div>
+          <div class="special-header"><div><p class="eyebrow">PROJECTS</p><h1>Your expeditions.</h1><p class="day-subtitle">Group tasks into an expedition. Assign a project in task details.</p></div><div class="special-stat"><strong id="projectTaskTotal">0</strong><span>open tasks</span></div></div>
+          <form class="project-form" id="projectForm"><input id="projectName" maxlength="60" autocomplete="off" placeholder="Name an expedition" required><input id="projectColor" type="color" value="#aeb9bb" aria-label="Project color"><button type="submit">Create expedition</button></form>
+          <div class="project-grid" id="projectGrid"></div><div class="project-empty" id="projectEmpty"><strong>Your next expedition starts here.</strong><span>Create a project to group related tasks.</span></div>
         </section>
 
         <section class="special-page content-page hidden" id="contentPage">
-          <div class="content-hero"><span class="content-hero-art" aria-hidden="true">✦</span><p class="eyebrow">YOUR CREATIVE QUEUE</p><h1>Things worth your time.</h1><p>Save a thought, a title to explore, or a link. No URL needed.</p><div class="content-hero-stats"><span id="contentOpenCount">0 to explore</span><span id="contentDoneCount">0 explored</span></div></div>
+          <div class="content-hero"><p class="eyebrow">SAVED CONTENT &amp; IDEAS</p><h1>Finds along the trail.</h1><p>Ideas, links and things you want to return to.</p><div class="content-hero-stats"><span id="contentOpenCount">0 to explore</span><span id="contentDoneCount">0 explored</span></div></div>
+          <details class="content-composer" id="contentComposer"><summary>＋ Save something</summary>
           <form class="content-capture" id="contentForm">
             <div class="content-capture-heading"><span class="content-capture-icon" aria-hidden="true">✦</span><div><strong>Keep something for later</strong><small>A title or note is enough. Add a link only if you have one.</small></div></div>
             <label class="content-main-field">What is it?<input id="contentTitle" maxlength="160" autocomplete="off" placeholder="A video to watch, an idea, or something to read"></label>
@@ -89,6 +89,7 @@
             <details class="content-link-disclosure" id="contentLinkDetails"><summary>Attach a link <span>optional</span></summary><label>Web address<input id="contentUrl" type="url" maxlength="2048" inputmode="url" placeholder="https://…"></label></details>
             <div class="content-capture-bottom"><div class="content-kind-switch" role="group" aria-label="Content type"><button data-content-kind="video" type="button">▶ Video</button><button data-content-kind="article" type="button">▤ Read</button><button data-content-kind="audio" type="button">♫ Listen</button><button class="active" data-content-kind="idea" type="button">✦ Idea</button></div><div class="content-capture-actions"><label>Plan for <input id="contentDate" type="date" aria-label="Plan content for date"></label><button class="content-save" type="submit">Save to my queue <span aria-hidden="true">→</span></button></div></div>
           </form>
+          </details>
           <div class="content-list-heading"><div><span class="eyebrow">COLLECTION</span><h2>Your queue</h2></div><div class="content-filters" aria-label="Filter saved content"><button class="active" data-content-filter="open" type="button">To explore</button><button data-content-filter="done" type="button">Finished</button><button data-content-filter="all" type="button">All</button></div></div>
           <div class="content-grid" id="contentGrid"></div>
           <div class="content-empty hidden" id="contentEmpty"><span aria-hidden="true">✳</span><strong>Room for a good discovery.</strong><p>Save a link or a thought above. It will live here until you’re ready.</p></div>
@@ -96,11 +97,26 @@
       </div>
     </section>
 
-    <aside class="utility-column" id="plannerTools" aria-label="Calendar and planning tools" aria-hidden="true"><div class="tools-drawer-head"><div><span>YOUR SPACE</span><strong>Calendar &amp; tools</strong></div><button id="closeToolsButton" type="button" aria-label="Close planning tools">×</button></div>
+    <aside class="desk-rail" id="deskRail" aria-label="Focus and daily notes">
+      <div class="desk-heading"><span>Your mountain hut</span><span class="desk-local"><i></i> On this device</span></div>
+      <div class="desk-tabs" role="tablist" aria-label="Desk mode"><button id="deskFocusTab" role="tab" aria-selected="true" aria-controls="focusCompanion" type="button" data-desk-tab="focus" title="Climb · focus timer">Climb</button><button id="deskSessionTab" role="tab" aria-selected="false" aria-controls="sessionSlot" type="button" data-desk-tab="session" title="Trek · time-target task list">Trek</button></div>
+      <section class="focus-companion" id="focusCompanion" role="tabpanel" aria-labelledby="deskFocusTab">
+        <div class="companion-top"><span id="companionState">One thing at a time</span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div>
+        <select id="companionTask" aria-label="Task to focus on"><option value="">Choose a task</option></select>
+        <strong class="companion-clock" id="companionClock">00:00</strong>
+        <span class="companion-caption" id="companionCaption">Pick a task. Give it your attention.</span>
+        <div class="companion-actions"><button id="companionStart" type="button">Start climb <span>▶</span></button><button id="companionDetails" class="hidden" type="button" aria-label="Open focus checklist and notes">↗</button><button id="companionFinish" class="hidden" type="button" aria-label="Finish focus session">✓</button></div>
+      </section>
+      <div id="sessionSlot" class="hidden" role="tabpanel" aria-labelledby="deskSessionTab"></div>
+      <section class="daily-notepad"><header><span><svg viewBox="0 0 24 24"><path d="M7 3h12v18H5V5h2M9 8h6M9 12h6M9 16h4"/></svg>Trail journal</span><small id="dailyNoteStatus" aria-live="polite">Saved</small></header><p id="dailyNoteDate">Today</p><textarea id="dailyNote" maxlength="12000" aria-label="Daily notes" placeholder="A thought, a loose end, a little plan…"></textarea><footer><span>Ctrl ↵ to make a task</span><button id="noteToTask" type="button" title="Turn the current line into a task">＋ Task</button></footer></section>
+      <button class="desk-library" id="deskLibrary" type="button">Your trail finds <span>↗</span></button>
+    </aside>
+
+    <aside class="utility-column" id="plannerTools" aria-label="Calendar and planning tools" aria-hidden="true"><div class="tools-drawer-head"><div><span>YOUR SPACE</span><strong>Your trail map</strong></div><button id="closeToolsButton" type="button" aria-label="Close planning tools">×</button></div>
       <section class="utility-card calendar-card panel-surface"><header class="card-heading"><strong id="calendarMonth">September 2026</strong><div class="calendar-actions"><button id="previousDay" type="button" aria-label="Previous month"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button><button id="nextDay" type="button" aria-label="Next month"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button></div></header><div class="calendar-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div><div class="calendar-grid" id="calendarGrid"></div><div class="calendar-footer"><label class="date-picker-wrap"><input type="date" id="datePicker" aria-label="Choose task date"></label><button class="today-button hidden" id="todayButton" type="button">Today</button></div></section>
       <section class="utility-card focus-card panel-surface"><div class="focus-topline"><span>Current view</span><strong id="progressValue">0%</strong></div><div class="focus-meter"><span id="focusBar"></span></div><p id="focusMessage">Start with one small task.</p></section>
       <section class="utility-card time-target-card panel-surface" aria-label="Short period target">
-        <header class="time-target-heading"><div><span>TIME TARGET</span><strong id="timeTargetTitle">Set a focused window</strong></div><div class="time-target-heading-actions"><button class="hidden time-target-widget-button" id="timeTargetWidgetButton" type="button">Widget</button><button class="hidden time-target-reset-button" id="resetTimeTarget" type="button">Reset</button><button class="hidden" id="clearTimeTarget" type="button">Clear</button></div></header>
+        <header class="time-target-heading"><div><span>TREK · TIME TARGET</span><strong id="timeTargetTitle">Set a focused window</strong></div><div class="time-target-heading-actions"><button class="hidden time-target-widget-button" id="timeTargetWidgetButton" type="button">Widget</button><button class="hidden time-target-reset-button" id="resetTimeTarget" type="button">Reset</button><button class="hidden" id="clearTimeTarget" type="button">Clear</button></div></header>
         <div class="time-target-live hidden" id="timeTargetLive">
           <strong id="timeTargetRemaining">03:00:00</strong><span id="timeTargetEnds">Ends at 2:00 PM</span><div class="time-target-meter"><span id="timeTargetBar"></span></div>
           <div class="time-target-tasks">
@@ -115,7 +131,7 @@
         <header class="reminder-card-heading"><div><span>REMINDERS</span><strong id="reminderCardCount">None scheduled</strong></div><button id="notificationPermissionButton" type="button">Enable alerts</button></header>
         <div class="reminder-preview-list" id="reminderPreviewList"><p>No upcoming reminders.</p></div>
       </section>
-      <button class="weekly-summary panel-surface" id="weeklySummaryButton" type="button"><span class="weekly-summary-top"><span>This week</span><strong id="weeklySummaryCount">0 / 0</strong></span><span class="weekly-summary-meter"><span id="weeklySummaryBar"></span></span><span class="weekly-summary-copy" id="weeklySummaryCopy">Set a weekly target and turn it into daily action.</span><span class="weekly-summary-action">Open weekly targets <span aria-hidden="true">→</span></span></button>
+      <button class="weekly-summary panel-surface" id="weeklySummaryButton" type="button"><span class="weekly-summary-top"><span>This week</span><strong id="weeklySummaryCount">0 / 0</strong></span><span class="weekly-summary-meter"><span id="weeklySummaryBar"></span></span><span class="weekly-summary-copy" id="weeklySummaryCopy">Set a weekly target and turn it into daily action.</span><span class="weekly-summary-action">Open weekly ascent <span aria-hidden="true">→</span></span></button>
       <button class="desktop-widget-card panel-surface" id="desktopWidgetButton"><span class="widget-card-icon"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 9h8M8 13h5"/></svg></span><span class="widget-card-copy"><strong id="widgetCardTitle">Put today on your desktop</strong><small id="widgetCardText">Check off tasks without opening Worko.</small></span><span class="widget-card-action" id="widgetCardAction">Add widget</span></button>
       <div class="utility-note"><span class="status-dot"></span><span class="saved-note"><span></span>Saved automatically</span></div>
     </aside>
@@ -129,12 +145,12 @@
         <label class="edit-field">Title<input id="editTitle" maxlength="160" autocomplete="off" required></label>
         <label class="edit-field">Description<textarea id="editDescription" maxlength="4000" rows="3" placeholder="Notes, context, or the reason this matters…"></textarea></label>
         <div class="detail-content-fields"><div><strong>Something to watch, read or revisit?</strong><span>Keep the link with this task so it is one click away.</span></div><div class="detail-grid two"><label class="edit-field">Content link<input id="editContentUrl" type="url" maxlength="2048" placeholder="https://…"></label><label class="edit-field">Type<select id="editContentKind"><option value="">Regular task</option><option value="video">Video</option><option value="article">Article / read</option><option value="audio">Audio / podcast</option><option value="idea">Idea</option></select></label></div></div>
-        <div class="detail-grid three"><label class="edit-field">Status<select id="editStatus"><option value="open">Open</option><option value="completed">Completed</option></select></label><label class="edit-field">Priority<select id="editPriority"><option value="normal">Normal</option><option value="high">Important</option><option value="low">Whenever</option></select></label><label class="edit-field">Project<select id="editProject"><option value="">No project</option></select></label></div>
+        <div class="detail-grid three"><label class="edit-field">Status<select id="editStatus"><option value="open">Open</option><option value="completed">Completed</option></select></label><label class="edit-field">Priority<select id="editPriority"><option value="normal">Trail · normal</option><option value="high">Summit · high</option><option value="low">Scenic · low</option></select></label><label class="edit-field">Expedition · project<select id="editProject"><option value="">No expedition</option></select></label></div>
         <div class="detail-grid three"><label class="edit-field">Due date<input id="editDate" type="date"></label><label class="edit-field">Due time<input id="editTime" type="time"></label><label class="edit-field">Estimate<select id="editEstimate"><option value="">No estimate</option><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option><option value="240">4 hours</option></select></label></div>
         <p class="schedule-gap-note">Timed tasks keep a minimum two-hour buffer on the same day.</p>
         <section class="schedule-editor">
           <div class="schedule-heading"><div><span>SCHEDULE</span><strong>Repeat</strong></div><small id="recurrenceSummary">One-time task</small></div>
-          <div class="detail-grid two"><label class="edit-field">Pattern<select id="editRecurrence"><option value="none">Does not repeat</option><option value="daily">Every day</option><option value="weekly">Every week</option><option value="monthly">Every month</option><option value="weekdays">Specific weekdays</option><option value="custom">Custom repetition</option></select></label><label class="edit-field recurrence-interval-field hidden" id="recurrenceIntervalField">Repeat every<span class="repeat-interval-control"><input id="editRecurrenceInterval" type="number" min="1" max="99" value="1"><select id="editRecurrenceUnit"><option value="day">day(s)</option><option value="week">week(s)</option><option value="month">month(s)</option></select></span></label></div>
+          <div class="detail-grid two"><label class="edit-field">Pattern<select id="editRecurrence"><option value="none">Does not repeat</option><option value="daily">Every day</option><option value="weekly">Every week</option><option value="monthly">Every month</option><option value="weekdays">Specific weekdays</option><option value="custom">Custom repetition</option></select></label><label class="edit-field recurrence-interval-field hidden" id="recurrenceIntervalField">Repeat every<span class="repeat-interval-control"><input id="editRecurrenceInterval" type="number" min="1" max="99" value="1"><select id="editRecurrenceUnit" aria-label="Repeat interval unit"><option value="day">day(s)</option><option value="week">week(s)</option><option value="month">month(s)</option></select></span></label></div>
           <div class="weekday-picker hidden" id="weekdayPicker" aria-label="Repeat on weekdays"><span>Repeat on</span><div><button type="button" data-weekday="1">M</button><button type="button" data-weekday="2">T</button><button type="button" data-weekday="3">W</button><button type="button" data-weekday="4">T</button><button type="button" data-weekday="5">F</button><button type="button" data-weekday="6">S</button><button type="button" data-weekday="0">S</button></div></div>
         </section>
         <section class="schedule-editor reminder-editor">
@@ -143,7 +159,7 @@
           <p class="reminder-help" id="reminderHelp">Set a due date and time to use deadline reminders.</p>
           <div class="reminder-edit-list" id="reminderEditList"></div>
         </section>
-        <section class="subtask-editor"><div class="subtask-heading"><strong>Subtasks</strong><span id="subtaskProgress">0 of 0</span></div><div class="subtask-edit-list" id="subtaskEditList"></div><div class="subtask-add-row"><input id="subtaskInput" maxlength="160" autocomplete="off" placeholder="Add a smaller step"><button id="subtaskAdd" type="button">Add</button></div></section>
+        <section class="subtask-editor"><div class="subtask-heading"><strong>Trail steps · subtasks</strong><span id="subtaskProgress">0 of 0</span></div><div class="subtask-edit-list" id="subtaskEditList"></div><div class="subtask-add-row"><input id="subtaskInput" maxlength="160" autocomplete="off" placeholder="Add a smaller step"><button id="subtaskAdd" type="button">Add</button></div></section>
         <div class="timestamp-row" id="timestampRow"></div>
       </div>
       <div class="dialog-actions"><button class="dialog-secondary" value="cancel" formnovalidate>Cancel</button><button class="dialog-primary" id="editSave" value="default">Save task</button></div>
@@ -152,7 +168,7 @@
 
   <dialog class="focus-dialog" id="focusDialog">
     <div class="focus-shell">
-      <header class="focus-header"><div><p class="eyebrow">FOCUS MODE</p><h3 id="focusTaskTitle">Task</h3><p id="focusTaskMeta">Stay with one thing.</p></div><button class="dialog-close" id="focusClose" type="button" aria-label="Close focus mode">×</button></header>
+      <header class="focus-header"><div><p class="eyebrow">THE CLIMB · FOCUS MODE</p><h3 id="focusTaskTitle">Task</h3><p id="focusTaskMeta">Stay with one thing.</p></div><button class="dialog-close" id="focusClose" type="button" aria-label="Close focus mode">×</button></header>
       <div class="focus-layout">
         <section class="focus-clock-panel">
           <div class="focus-orbit" id="focusOrbit"><div><span id="focusTimer">00:00:00</span><small id="focusTimerState">Ready</small></div></div>
@@ -171,13 +187,13 @@
 
   <dialog class="recovery-dialog" id="recoveryDialog">
     <div class="recovery-shell">
-      <header class="recovery-header"><div><p class="eyebrow">MISSED-TASK RECOVERY</p><h3 id="recoveryTaskTitle">Make a realistic next move.</h3><p>Choose once. Worko will update the task without losing its history.</p></div><button class="dialog-close" id="recoveryClose" type="button" aria-label="Close recovery options">×</button></header>
+      <header class="recovery-header"><div><p class="eyebrow">AVALANCHE · TASK RECOVERY</p><h3 id="recoveryTaskTitle">Make a realistic next move.</h3><p>Choose once. Worko will update the task without losing its history.</p></div><button class="dialog-close" id="recoveryClose" type="button" aria-label="Close recovery options">×</button></header>
       <div class="recovery-options">
         <button class="recovery-choice recovery-primary" data-recovery-action="tomorrow" type="button"><strong>Do tomorrow</strong><span>Move it to the next day</span></button>
         <button class="recovery-choice" data-recovery-action="subtasks" type="button"><strong>Break into subtasks</strong><span>Open task details and plan smaller steps</span></button>
         <label class="recovery-choice recovery-control"><strong>Choose another date</strong><span><input id="recoveryDate" type="date"><button data-recovery-action="date" type="button">Move</button></span></label>
-        <label class="recovery-choice recovery-control"><strong>Change priority</strong><span><select id="recoveryPriority"><option value="high">Important</option><option value="normal">Normal</option><option value="low">Whenever</option></select><button data-recovery-action="priority" type="button">Apply</button></span></label>
-        <button class="recovery-choice" data-recovery-action="backlog" type="button"><strong>Move to backlog</strong><span>Remove the date and return it to Inbox</span></button>
+        <label class="recovery-choice recovery-control"><strong>Change priority</strong><span><select id="recoveryPriority" aria-label="Recovery priority"><option value="high">Summit · high</option><option value="normal">Trail · normal</option><option value="low">Scenic · low</option></select><button data-recovery-action="priority" type="button">Apply</button></span></label>
+        <button class="recovery-choice" data-recovery-action="backlog" type="button"><strong>Back to Basecamp</strong><span>Remove the date and keep it in your backlog</span></button>
         <button class="recovery-choice recovery-delete" data-recovery-action="delete" type="button"><strong>Delete task</strong><span>Remove it with an Undo option</span></button>
       </div>
     </div>
@@ -192,6 +208,7 @@
   </section>
 
   <div class="toast" id="toast" role="status"><span id="toastText">Saved</span><button id="toastUndo" class="hidden">Undo</button></div>
-  <script src="renderer.js?v=2.4.6"></script>
+  <script src="worko-ui.js?v=2.6.0"></script>
+  <script src="renderer.js?v=2.6.0"></script>
 </body>
 </html>
