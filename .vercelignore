@@ -15,5 +15,5 @@
 !package.json
 !package-lock.json
 !vercel.json
-!assets/
+!assets
 !assets/**
